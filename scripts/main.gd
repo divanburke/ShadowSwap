@@ -119,7 +119,7 @@ func build_ui():
 
 	var subtitle = Label.new()
 	subtitle.position = Vector2(46, 69)
-	subtitle.text = "ARCADE PHYSICS FIGHTER  |  BUILD 02"
+	subtitle.text = "STICK FIGHT PHYSICS  |  BUILD 03"
 	subtitle.add_theme_font_size_override("font_size", 11)
 	subtitle.add_theme_color_override("font_color", Color("#7f8b9e"))
 	ui_layer.add_child(subtitle)
