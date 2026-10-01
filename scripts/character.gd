@@ -109,7 +109,7 @@ func _physics_process(delta):
 			MOVE_FRICTION * delta
 		)
 
-	var jump_down = Input.is_key_pressed(KEY_SPACE)
+	var jump_down = Input.is_key_pressed(KEY_UP)
 	var jump_pressed = jump_down and not jump_was_down
 	jump_was_down = jump_down
 
