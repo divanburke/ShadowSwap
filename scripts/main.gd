@@ -36,10 +36,10 @@ func _ready():
 
 func start_round():
 	if player != null and is_instance_valid(player):
-		player.queue_free()
+		player.free()
 
 	if ai != null and is_instance_valid(ai):
-		ai.queue_free()
+		ai.free()
 
 	player = FighterScript.new()
 	player.name = "PlayerFighter"
