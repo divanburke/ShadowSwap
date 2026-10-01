@@ -1,21 +1,15 @@
 extends Node2D
 
+const SwapCharacter = preload("res://scripts/character.gd")
+
 const VIEW_SIZE := Vector2(1152.0, 648.0)
 const PLAYER_START := Vector2(140.0, 535.0)
 const SHADOW_START := Vector2(1012.0, 535.0)
 
-const PLAYER_LAYER := 4
-const SHADOW_LAYER := 8
 const REAL_WORLD_MASK := 1
 const SHADOW_WORLD_MASK := 2
 const COMMON_WORLD_LAYER := 3
-
-const BODY_SIZE := Vector2(28.0, 42.0)
-const MOVE_SPEED := 285.0
-const MOVE_ACCEL := 1900.0
-const MOVE_FRICTION := 2300.0
-const GRAVITY := 1500.0
-const JUMP_SPEED := 560.0
+const PLAYER_LAYER := 4
 
 var player: SwapCharacter
 var shadow: SwapCharacter
@@ -38,120 +32,14 @@ var death_count := 0
 var game_won := false
 var last_swap_midpoint := Vector2.ZERO
 
-
-class SwapCharacter extends CharacterBody2D:
-	var owner_game: Node
-	var is_shadow := false
-	var world_id := 1
-	var body_color := Color.WHITE
-	var accent_color := Color.WHITE
-	var character_name := "PLAYER"
-
-	func setup(
-		game: Node,
-		shadow_character: bool,
-		start_position: Vector2,
-		start_world: int,
-		p_body_color: Color,
-		p_accent_color: Color,
-		p_character_name: String
-	) -> void:
-		owner_game = game
-		is_shadow = shadow_character
-		world_id = start_world
-		body_color = p_body_color
-		accent_color = p_accent_color
-		character_name = p_character_name
-
-		position = start_position
-		collision_layer = SHADOW_LAYER if is_shadow else PLAYER_LAYER
-		set_world(world_id)
-
-		var shape := CollisionShape2D.new()
-		var rectangle := RectangleShape2D.new()
-		rectangle.size = BODY_SIZE
-		shape.shape = rectangle
-		add_child(shape)
-
-		queue_redraw()
-
-	func set_world(new_world: int) -> void:
-		world_id = new_world
-		collision_mask = SHADOW_WORLD_MASK if world_id == 2 else REAL_WORLD_MASK
-		queue_redraw()
-
-	func _physics_process(delta: float) -> void:
-		if owner_game.game_won:
-			velocity = velocity.move_toward(Vector2.ZERO, MOVE_FRICTION * delta)
-			move_and_slide()
-			queue_redraw()
-			return
-
-		var is_active := owner_game.active_character == self
-		var direction := 0.0
-
-		if is_active:
-			if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
-				direction -= 1.0
-			if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
-				direction += 1.0
-
-		if direction != 0.0:
-			velocity.x = move_toward(
-				velocity.x,
-				direction * MOVE_SPEED,
-				MOVE_ACCEL * delta
-			)
-		else:
-			velocity.x = move_toward(
-				velocity.x,
-				0.0,
-				MOVE_FRICTION * delta
-			)
-
-		if is_active and Input.is_key_pressed(KEY_SPACE) and is_on_floor():
-			velocity.y = -JUMP_SPEED
-
-		if not is_on_floor():
-			velocity.y += GRAVITY * delta
-
-		move_and_slide()
-		position.x = clamp(position.x, 18.0, VIEW_SIZE.x - 18.0)
-
-		if position.y > VIEW_SIZE.y + 80.0:
-			owner_game.respawn_pair()
-
-		queue_redraw()
-
-	func _draw() -> void:
-		var half := BODY_SIZE * 0.5
-		var rect := Rect2(-half, BODY_SIZE)
-
-		if is_shadow:
-			draw_circle(Vector2.ZERO, 25.0, Color(accent_color, 0.10))
-			draw_circle(Vector2.ZERO, 20.0, Color(accent_color, 0.16))
-			draw_rect(rect, Color(body_color, 0.78), true)
-			draw_rect(rect, accent_color, false, 2.0)
-			draw_circle(Vector2(-6, -5), 2.5, Color(1, 1, 1, 0.7))
-			draw_circle(Vector2(6, -5), 2.5, Color(1, 1, 1, 0.7))
-			draw_line(Vector2(-7, 7), Vector2(7, 7), Color(accent_color, 0.8), 2.0)
-		else:
-			draw_circle(Vector2.ZERO, 26.0, Color(accent_color, 0.09))
-			draw_rect(rect, body_color, true)
-			draw_rect(rect, accent_color, false, 2.0)
-			draw_circle(Vector2(-6, -5), 2.5, accent_color)
-			draw_circle(Vector2(6, -5), 2.5, accent_color)
-			draw_line(Vector2(-7, 7), Vector2(7, 7), accent_color, 2.0)
-
-
 func _ready() -> void:
 	build_level()
 	build_characters()
 	build_ui()
+
 	active_character = player
 	update_ui()
 	queue_redraw()
-
 
 func build_level() -> void:
 	create_platform(
@@ -163,6 +51,7 @@ func build_level() -> void:
 		Color("#3a4252")
 	)
 
+	# Real world: a staircase that stops before the central platform.
 	create_platform(
 		"RealStep1",
 		Vector2(210, 500),
@@ -183,13 +72,14 @@ func build_level() -> void:
 
 	create_platform(
 		"RealStep3",
-		Vector2(190, 320),
-		Vector2(120, 22),
+		Vector2(140, 320),
+		Vector2(100, 22),
 		REAL_WORLD_MASK,
 		Color("#203c4b"),
 		Color("#55d6ff")
 	)
 
+	# Shadow world: the final platform has a jump into the shared center.
 	create_platform(
 		"ShadowStep1",
 		Vector2(942, 500),
@@ -237,7 +127,6 @@ func build_level() -> void:
 
 	create_goal()
 
-
 func create_platform(
 	platform_name: String,
 	platform_position: Vector2,
@@ -284,7 +173,6 @@ func create_platform(
 
 	return platform
 
-
 func build_characters() -> void:
 	player = SwapCharacter.new()
 	player.name = "Player"
@@ -311,7 +199,6 @@ func build_characters() -> void:
 		Color("#b993ff"),
 		"SHADOW"
 	)
-
 
 func create_goal() -> void:
 	goal_area = Area2D.new()
@@ -349,7 +236,6 @@ func create_goal() -> void:
 	goal_area.add_child(glow)
 
 	goal_area.body_entered.connect(_on_goal_body_entered)
-
 
 func build_ui() -> void:
 	var canvas := CanvasLayer.new()
@@ -431,7 +317,6 @@ func build_ui() -> void:
 	win_subtitle.add_theme_color_override("font_color", Color("#aeb9ca"))
 	win_panel.add_child(win_subtitle)
 
-
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_TAB:
@@ -443,7 +328,6 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_ENTER and game_won:
 			respawn_pair()
 
-
 func switch_control() -> void:
 	if game_won:
 		return
@@ -451,7 +335,6 @@ func switch_control() -> void:
 	active_character = shadow if active_character == player else player
 	show_message("CONTROL → " + active_character.character_name, 0.9)
 	update_ui()
-
 
 func swap_characters() -> void:
 	if game_won:
@@ -476,7 +359,6 @@ func swap_characters() -> void:
 	show_message("WORLD SWAP", 1.0)
 	queue_redraw()
 
-
 func respawn_pair() -> void:
 	if game_won:
 		game_won = false
@@ -500,7 +382,6 @@ func respawn_pair() -> void:
 	update_ui()
 	queue_redraw()
 
-
 func _on_goal_body_entered(body: Node) -> void:
 	if body != player or game_won:
 		return
@@ -515,11 +396,9 @@ func _on_goal_body_entered(body: Node) -> void:
 	status_label.text = "GOAL REACHED"
 	queue_redraw()
 
-
 func show_message(text_value: String, duration: float) -> void:
 	message_label.text = text_value
 	message_time = duration
-
 
 func update_ui() -> void:
 	if not player or not shadow or not active_label or not status_label:
@@ -535,7 +414,6 @@ func update_ui() -> void:
 		+ "Current world: " + world_name
 	)
 
-
 func _process(delta: float) -> void:
 	if swap_flash > 0.0:
 		swap_flash = maxf(swap_flash - delta * 2.4, 0.0)
@@ -547,7 +425,6 @@ func _process(delta: float) -> void:
 
 	update_ui()
 	queue_redraw()
-
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color("#0b0e14"))
