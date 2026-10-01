@@ -114,9 +114,9 @@ func make_joint(body_a, body_b, anchor_position):
 	joint.name = body_a.name + "_TO_" + body_b.name
 	joint.position = anchor_position
 	joint.disable_collision = true
+	add_child(joint)
 	joint.node_a = joint.get_path_to(body_a)
 	joint.node_b = joint.get_path_to(body_b)
-	add_child(joint)
 	return joint
 
 
