@@ -9,13 +9,17 @@ const ARM_SIZE = Vector2(8, 42)
 const LEG_SIZE = Vector2(9, 46)
 
 # Movement is intentionally direct and responsive, closer to an arcade fighter.
-const MOVE_SPEED = 285.0
-const ACCELERATION = 1900.0
-const AIR_ACCELERATION = 1150.0
-const GROUND_FRICTION = 2200.0
-const AIR_FRICTION = 350.0
+const MOVE_FORCE = 1050.0
+const AIR_MOVE_FORCE = 620.0
+const MAX_MOVE_SPEED = 300.0
+const GROUND_DRAG = 2.5
+const AIR_DRAG = 0.55
 const JUMP_SPEED = 520.0
-const MAX_FALL_SPEED = 760.0
+const MAX_FALL_SPEED = 820.0
+
+# Soft balance forces keep the fighter naturally upright without hard-locking it.
+const BALANCE_STRENGTH = 2100.0
+const BALANCE_DAMPING = 105.0
 
 const PUNCH_REACH = 62.0
 const KICK_REACH = 74.0
@@ -113,11 +117,15 @@ func create_part(part_name, world_position, size_value, shape_kind):
 	return limb
 
 
-func make_joint(body_a, body_b, anchor_position):
+func make_joint(body_a, body_b, anchor_position, lower_angle, upper_angle):
 	var joint = PinJoint2D.new()
 	joint.name = body_a.name + "_TO_" + body_b.name
 	joint.position = anchor_position
 	joint.disable_collision = true
+	joint.angular_limit_enabled = true
+	joint.angular_limit_lower = lower_angle
+	joint.angular_limit_upper = upper_angle
+	joint.softness = 0.12
 	add_child(joint)
 	joint.node_a = joint.get_path_to(body_a)
 	joint.node_b = joint.get_path_to(body_b)
@@ -143,17 +151,7 @@ func _physics_process(delta):
 		handle_ai(delta)
 
 	update_movement(delta)
-	keep_torso_upright()
-
-
-func keep_torso_upright():
-	var torso = parts.get("torso")
-	if torso == null or detached["torso"]:
-		return
-
-	# Keep the core upright while the connected limbs still swing physically.
-	torso.rotation = 0.0
-	torso.angular_velocity = 0.0
+	apply_balance()
 
 
 func handle_player_input():
@@ -337,8 +335,11 @@ func try_jump():
 	if torso == null or not is_grounded():
 		return
 
-	torso.linear_velocity.y = -JUMP_SPEED * (0.72 + get_leg_factor() * 0.28)
-	jump_cooldown = 0.28
+	torso.apply_central_impulse(Vector2(
+		0.0,
+		-JUMP_SPEED * torso.mass * (0.82 + get_leg_factor() * 0.18)
+	))
+	jump_cooldown = 0.34
 
 
 func try_attack(kind):
