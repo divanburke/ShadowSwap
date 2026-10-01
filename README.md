@@ -1,32 +1,41 @@
 # Shadow Swap
 
-First playable Godot prototype for the Shadow Swap puzzle-platformer.
+A small 2D puzzle-platformer prototype built with Godot 4.7.
+
+The game is centered on one idea: you control a character and a shadow that exist in two versions of the level, and you can swap their positions and worlds.
 
 ## Controls
 
 - **A / D** or **Left / Right** — move
 - **Space** — jump
-- **Tab** — switch which character you control
-- **Q** — swap the character and shadow positions/worlds
-- **R** — reset the puzzle
-- **Enter** — restart after clearing the level
+- **Tab** — switch control between Real and Shadow
+- **Q** — swap positions and worlds
+- **R** — reset the current level
+- **Enter** — continue after a level is cleared
 
-## Prototype mechanic
+## Prototype progression
 
-The real character and shadow each have their own version of the level.
+### Level 01 — The First Swap
+Learn the basic mechanic. Move the Shadow up the purple route, position it beside the goal route, then press Q.
 
-- Real-only platforms use the blue/cyan world.
-- Shadow-only platforms use the purple world.
-- Common platforms exist in both worlds.
-- When you press **Q**, the player and shadow exchange positions **and their current world**, so the player can occupy the shadow's route.
+### Level 02 — Hold the Door
+The Shadow can activate a purple-only switch. Leave the Shadow standing on it while you control the Real character through the opened door. The final position still matters.
 
-## First puzzle
+### Level 03 — The Chain
+Stand the Real character on the blue switch, switch to the Shadow, pass the opened gate, and hold the purple switch. Then return to the Real character, ride the moving platform across the pit, and make the final Q swap.
 
-1. Start as the Real character.
-2. Press **Tab** to control the Shadow.
-3. Move the Shadow up the purple staircase.
-4. Jump onto the central platform.
-5. Press **Q** to swap into the Shadow's position.
-6. Walk up to the glowing goal.
+## Systems currently included
 
-The level is intentionally simple so the core mechanic is easy to test before adding hazards, switches, doors, moving platforms, multiple shadows, and more complex puzzles.
+- Two simultaneous characters
+- Separate Real and Shadow world collision layers
+- Position + world swapping
+- Character-specific switches
+- Animated doors
+- Moving platforms
+- Spikes and a timing pit
+- Level progression
+- Reset and death flow
+- Goal detection and level-complete screens
+- Procedural visuals with no external art dependencies
+
+The project intentionally starts with simple shapes and code-generated visuals. The next development stage can move these systems into reusable Godot scenes and add proper art, sound, particles, more puzzle mechanics, and a larger campaign.
