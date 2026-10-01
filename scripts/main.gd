@@ -117,6 +117,7 @@ func build_level_01():
 
 	create_hazard(Vector2(576, 563), Vector2(420, 12), COMMON_LAYER, "THE VOID SPIKES")
 	create_goal()
+	build_characters_for_level()
 
 	set_objective(
 		"Reach the upper Shadow platform, then Q to swap into its position.",
