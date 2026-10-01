@@ -1,25 +1,33 @@
 extends Node2D
 
 const CharacterScript = preload("res://scripts/character.gd")
+const HazardScript = preload("res://scripts/hazard.gd")
+const SwitchScript = preload("res://scripts/switch.gd")
+const DoorScript = preload("res://scripts/door.gd")
+const MovingPlatformScript = preload("res://scripts/moving_platform.gd")
 
 const VIEW_SIZE = Vector2(1152, 648)
-const PLAYER_START = Vector2(140, 535)
-const SHADOW_START = Vector2(1012, 535)
 
 const REAL_WORLD = 1
 const SHADOW_WORLD = 2
 const COMMON_LAYER = 3
 
+const LEVEL_COUNT = 3
+
+var level_index = 0
+var level_root
 var player
 var shadow
 var active_character
 
-var goal_position = Vector2(576, 118)
 var goal_area
+var goal_position = Vector2.ZERO
 
 var status_label
 var active_label
 var message_label
+var level_label
+var objective_label
 var win_panel
 var win_title
 var win_subtitle
@@ -29,33 +37,178 @@ var message_time = 0.0
 var swap_count = 0
 var reset_count = 0
 var game_won = false
+var resetting = false
 var last_swap_midpoint = Vector2.ZERO
+var pulse_time = 0.0
 
 
 func _ready():
-	build_level()
-	build_characters()
 	build_ui()
+	start_level(0)
+
+
+func start_level(new_level):
+	level_index = clampi(new_level, 0, LEVEL_COUNT - 1)
+
+	if level_root != null and is_instance_valid(level_root):
+		level_root.free()
+
+	level_root = Node2D.new()
+	level_root.name = "Level_%02d" % (level_index + 1)
+	add_child(level_root)
+	move_child(level_root, 0)
+
+	game_won = false
+	resetting = false
+	swap_flash = 0.0
+	message_time = 0.0
+	swap_count = 0
+
+	build_current_level()
 	active_character = player
+
+	win_panel.visible = false
+	update_level_ui()
 	update_ui()
+
+	show_message("LEVEL %02d" % (level_index + 1), 1.0)
 	queue_redraw()
 
 
-func build_level():
-	create_platform("Ground", Vector2(576, 610), Vector2(1152, 76), COMMON_LAYER, Color("#262b36"), Color("#3a4252"))
+func build_current_level():
+	if level_index == 0:
+		build_level_01()
+	elif level_index == 1:
+		build_level_02()
+	else:
+		build_level_03()
 
-	create_platform("RealStep1", Vector2(210, 500), Vector2(170, 22), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
-	create_platform("RealStep2", Vector2(270, 415), Vector2(150, 22), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
-	create_platform("RealStep3", Vector2(140, 320), Vector2(100, 22), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
 
-	create_platform("ShadowStep1", Vector2(942, 500), Vector2(170, 22), SHADOW_WORLD, Color("#332a48"), Color("#b993ff"))
-	create_platform("ShadowStep2", Vector2(882, 415), Vector2(150, 22), SHADOW_WORLD, Color("#332a48"), Color("#b993ff"))
-	create_platform("ShadowStep3", Vector2(900, 320), Vector2(160, 22), SHADOW_WORLD, Color("#332a48"), Color("#b993ff"))
+func build_shared_ground():
+	create_platform(
+		"Ground",
+		Vector2(576, 610),
+		Vector2(1152, 76),
+		COMMON_LAYER,
+		Color("#232934"),
+		Color("#40495a")
+	)
 
-	create_platform("Center", Vector2(576, 245), Vector2(250, 24), COMMON_LAYER, Color("#303744"), Color("#dce5f4"))
-	create_platform("GoalPlatform", Vector2(576, 145), Vector2(180, 22), COMMON_LAYER, Color("#303744"), Color("#dce5f4"))
+
+func build_level_01():
+	goal_position = Vector2(576, 118)
+
+	build_shared_ground()
+
+	create_world_marker(Vector2(110, 132), "REAL", Color("#55d6ff"))
+	create_world_marker(Vector2(1042, 132), "SHADOW", Color("#b993ff"))
+
+	create_platform("R1", Vector2(175, 510), Vector2(170, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R2", Vector2(250, 425), Vector2(150, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R3", Vector2(150, 335), Vector2(115, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+
+	create_platform("S1", Vector2(975, 510), Vector2(170, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S2", Vector2(900, 425), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S3", Vector2(870, 335), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S4", Vector2(730, 285), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+
+	create_platform("Center", Vector2(576, 245), Vector2(230, 22), COMMON_LAYER, Color("#303744"), Color("#dce5f4"))
+	create_platform("Goal", Vector2(576, 145), Vector2(190, 22), COMMON_LAYER, Color("#303744"), Color("#dce5f4"))
+
+	create_hazard(Vector2(576, 535), Vector2(420, 30), 0, "THE VOID SPIKES")
+	create_goal()
+
+	set_objective(
+		"Reach the upper Shadow platform, then Q to swap into its position.",
+		"1. TAB to control SHADOW\n2. Climb the purple route\n3. Reach the floating platform\n4. Q to swap\n5. Reach the cyan goal"
+	)
+
+
+func build_level_02():
+	goal_position = Vector2(790, 126)
+
+	build_shared_ground()
+
+	create_world_marker(Vector2(110, 132), "REAL", Color("#55d6ff"))
+	create_world_marker(Vector2(1042, 132), "SHADOW", Color("#b993ff"))
+
+	# Real route.
+	create_platform("R1", Vector2(175, 505), Vector2(180, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R2", Vector2(260, 420), Vector2(150, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R3", Vector2(345, 340), Vector2(150, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R4", Vector2(520, 340), Vector2(150, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R5", Vector2(665, 260), Vector2(180, 20), COMMON_LAYER, Color("#303744"), Color("#dce5f4"))
+	create_platform("R6", Vector2(790, 150), Vector2(180, 22), COMMON_LAYER, Color("#303744"), Color("#dce5f4"))
+
+	# Shadow route to the switch.
+	create_platform("S1", Vector2(975, 505), Vector2(170, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S2", Vector2(900, 420), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S3", Vector2(830, 330), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S4", Vector2(760, 265), Vector2(120, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+
+	var door = create_door(Vector2(430, 430), Vector2(30, 160), Color("#55d6ff"))
+	var switch = create_switch(Vector2(760, 230), true, "SHADOW SWITCH")
+	switch.connect_door(door)
+
+	create_hazard(Vector2(545, 535), Vector2(300, 30), REAL_WORLD, "REAL SPIKES")
+	create_hazard(Vector2(980, 535), Vector2(90, 30), SHADOW_WORLD, "SHADOW SPIKES")
 
 	create_goal()
+
+	set_objective(
+		"Park the Shadow on the purple switch to open the real door.",
+		"1. TAB → SHADOW\n2. Reach the purple switch\n3. TAB → REAL\n4. Run through the open door\n5. Q when you need the final shortcut"
+	)
+
+
+func build_level_03():
+	goal_position = Vector2(965, 126)
+
+	build_shared_ground()
+
+	create_world_marker(Vector2(110, 132), "REAL", Color("#55d6ff"))
+	create_world_marker(Vector2(1042, 132), "SHADOW", Color("#b993ff"))
+
+	# Real starting ledges and first switch.
+	create_platform("R1", Vector2(175, 490), Vector2(180, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R2", Vector2(275, 410), Vector2(160, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+	create_platform("R3", Vector2(350, 330), Vector2(120, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
+
+	var shadow_door = create_door(Vector2(825, 435), Vector2(30, 150), Color("#b993ff"))
+	var real_switch = create_switch(Vector2(180, 545), false, "REAL SWITCH")
+	real_switch.connect_door(shadow_door)
+
+	# Shadow route and second switch.
+	create_platform("S1", Vector2(980, 500), Vector2(170, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S2", Vector2(920, 415), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S3", Vector2(865, 330), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+	create_platform("S4", Vector2(955, 255), Vector2(150, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
+
+	var real_door = create_door(Vector2(430, 375), Vector2(30, 150), Color("#55d6ff"))
+	var shadow_switch = create_switch(Vector2(955, 215), true, "SHADOW SWITCH")
+	shadow_switch.connect_door(real_door)
+
+	# Final moving platform across a spike pit.
+	create_moving_platform(
+		Vector2(465, 455),
+		Vector2(720, 315),
+		Vector2(135, 22),
+		0.85,
+		COMMON_LAYER,
+		Color("#303744"),
+		Color("#dce5f4")
+	)
+
+	create_platform("GoalPlatform", Vector2(965, 155), Vector2(190, 22), COMMON_LAYER, Color("#303744"), Color("#dce5f4"))
+	create_hazard(Vector2(600, 555), Vector2(390, 36), COMMON_LAYER, "TIMING PIT")
+	create_hazard(Vector2(820, 530), Vector2(85, 30), SHADOW_WORLD, "SHADOW SPIKES")
+
+	create_goal()
+
+	set_objective(
+		"Hold both switches, cross the moving platform, then make the final swap.",
+		"1. Stand REAL on the blue switch\n2. TAB → SHADOW\n3. Cross the opened gate\n4. Hold the purple switch\n5. TAB → REAL\n6. Ride the moving platform\n7. Q into the Shadow position"
+	)
 
 
 func create_platform(platform_name, platform_position, platform_size, layer, fill_color, border_color):
@@ -64,7 +217,7 @@ func create_platform(platform_name, platform_position, platform_size, layer, fil
 	platform.position = platform_position
 	platform.collision_layer = layer
 	platform.collision_mask = 0
-	add_child(platform)
+	level_root.add_child(platform)
 
 	var collision = CollisionShape2D.new()
 	var shape = RectangleShape2D.new()
@@ -96,16 +249,92 @@ func create_platform(platform_name, platform_position, platform_size, layer, fil
 	platform.add_child(outline)
 
 
-func build_characters():
+func create_hazard(hazard_position, hazard_size, world, hazard_name):
+	var hazard = HazardScript.new()
+	hazard.name = hazard_name.replace(" ", "_")
+	hazard.position = hazard_position
+	level_root.add_child(hazard)
+	hazard.setup(self, world, hazard_name, hazard_size)
+
+
+func create_switch(switch_position, shadow_only, display_name):
+	var switch = SwitchScript.new()
+	switch.name = display_name.replace(" ", "_")
+	level_root.add_child(switch)
+	switch.setup(self, switch_position, shadow_only, display_name)
+	return switch
+
+
+func create_door(door_position, door_size, door_color):
+	var door = DoorScript.new()
+	door.name = "Door_%d" % level_root.get_child_count()
+	level_root.add_child(door)
+	door.setup(door_position, door_size, door_color)
+	return door
+
+
+func create_moving_platform(start_position, end_position, platform_size, speed, layer, fill_color, border_color):
+	var platform = MovingPlatformScript.new()
+	platform.name = "MovingPlatform"
+	level_root.add_child(platform)
+	platform.setup(
+		start_position,
+		end_position,
+		platform_size,
+		speed,
+		fill_color,
+		border_color,
+		layer
+	)
+
+
+func create_world_marker(marker_position, world_name, marker_color):
+	var label = Label.new()
+	label.position = marker_position
+	label.text = world_name
+	label.add_theme_font_size_override("font_size", 12)
+	label.add_theme_color_override("font_color", Color(marker_color, 0.75))
+	level_root.add_child(label)
+
+
+func build_characters_for_level():
 	player = CharacterScript.new()
 	player.name = "Player"
-	add_child(player)
-	player.setup(self, false, PLAYER_START, REAL_WORLD, Color("#f4f7ff"), Color("#55d6ff"), "REAL")
+	level_root.add_child(player)
+
+	var player_start = Vector2(125, 530)
+	var shadow_start = Vector2(1025, 530)
+
+	if level_index == 1:
+		player_start = Vector2(125, 530)
+		shadow_start = Vector2(1025, 530)
+	elif level_index == 2:
+		player_start = Vector2(125, 530)
+		shadow_start = Vector2(1025, 530)
+
+	player.setup(
+		self,
+		false,
+		player_start,
+		REAL_WORLD,
+		Color("#f4f7ff"),
+		Color("#55d6ff"),
+		"REAL"
+	)
 
 	shadow = CharacterScript.new()
 	shadow.name = "Shadow"
-	add_child(shadow)
-	shadow.setup(self, true, SHADOW_START, SHADOW_WORLD, Color("#d7c7ff"), Color("#b993ff"), "SHADOW")
+	level_root.add_child(shadow)
+
+	shadow.setup(
+		self,
+		true,
+		shadow_start,
+		SHADOW_WORLD,
+		Color("#d7c7ff"),
+		Color("#b993ff"),
+		"SHADOW"
+	)
 
 
 func create_goal():
@@ -114,36 +343,31 @@ func create_goal():
 	goal_area.position = goal_position
 	goal_area.collision_layer = 16
 	goal_area.collision_mask = 4
-	add_child(goal_area)
+	level_root.add_child(goal_area)
 
 	var collision = CollisionShape2D.new()
 	var shape = RectangleShape2D.new()
-	shape.size = Vector2(100, 70)
+	shape.size = Vector2(100, 75)
 	collision.shape = shape
 	goal_area.add_child(collision)
 
-	var visual = Polygon2D.new()
-	visual.polygon = PackedVector2Array([
-		Vector2(-34, 30),
-		Vector2(-34, -20),
-		Vector2(34, -20),
-		Vector2(34, 30)
-	])
-	visual.color = Color("#55d6ff")
-	goal_area.add_child(visual)
-
-	var glow = Polygon2D.new()
-	glow.polygon = PackedVector2Array([
-		Vector2(-46, 38),
-		Vector2(-46, -30),
-		Vector2(46, -30),
-		Vector2(46, 38)
-	])
-	glow.color = Color(0.33, 0.84, 1.0, 0.08)
-	glow.z_index = -1
-	goal_area.add_child(glow)
-
 	goal_area.body_entered.connect(_on_goal_body_entered)
+
+
+func set_objective(in_game, instruction_text):
+	objective_label.text = in_game
+	status_label.text = instruction_text.replace("\n", "   •   ")
+
+
+func update_level_ui():
+	level_label.text = "LEVEL %02d / %02d" % [level_index + 1, LEVEL_COUNT]
+
+	if level_index == 0:
+		objective_label.text = "CORE MECHANIC — POSITION THE SHADOW"
+	elif level_index == 1:
+		objective_label.text = "MECHANIC 02 — HOLD SWITCHES TO OPEN DOORS"
+	else:
+		objective_label.text = "MECHANIC 03 — CHAIN SWITCHES + MOVING PLATFORM"
 
 
 func build_ui():
@@ -152,79 +376,105 @@ func build_ui():
 	add_child(canvas)
 
 	var top_bar = ColorRect.new()
-	top_bar.position = Vector2(28, 22)
-	top_bar.size = Vector2(1096, 84)
-	top_bar.color = Color(0.04, 0.05, 0.08, 0.92)
+	top_bar.position = Vector2(24, 20)
+	top_bar.size = Vector2(1104, 86)
+	top_bar.color = Color(0.035, 0.045, 0.075, 0.94)
 	canvas.add_child(top_bar)
 
+	level_label = Label.new()
+	level_label.position = Vector2(46, 30)
+	level_label.text = "LEVEL 01 / 03"
+	level_label.add_theme_font_size_override("font_size", 13)
+	level_label.add_theme_color_override("font_color", Color("#8d99ad"))
+	canvas.add_child(level_label)
+
 	var title = Label.new()
-	title.position = Vector2(48, 31)
+	title.position = Vector2(45, 48)
 	title.text = "SHADOW SWAP"
-	title.add_theme_font_size_override("font_size", 28)
+	title.add_theme_font_size_override("font_size", 29)
 	title.add_theme_color_override("font_color", Color("#f4f7ff"))
 	canvas.add_child(title)
 
-	var subtitle = Label.new()
-	subtitle.position = Vector2(50, 69)
-	subtitle.text = "BUILD 01  |  FIND A POSITION  |  SWAP WORLDS"
-	subtitle.add_theme_font_size_override("font_size", 12)
-	subtitle.add_theme_color_override("font_color", Color("#8d99ad"))
-	canvas.add_child(subtitle)
-
 	active_label = Label.new()
-	active_label.position = Vector2(650, 36)
-	active_label.size = Vector2(235, 24)
+	active_label.position = Vector2(620, 34)
+	active_label.size = Vector2(190, 28)
 	active_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	active_label.add_theme_font_size_override("font_size", 16)
 	canvas.add_child(active_label)
 
 	var controls = Label.new()
-	controls.position = Vector2(895, 31)
-	controls.size = Vector2(205, 60)
+	controls.position = Vector2(820, 31)
+	controls.size = Vector2(275, 66)
 	controls.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	controls.text = "A / D or ARROWS  MOVE\nSPACE  JUMP\nTAB  CONTROL  |  Q  SWAP\nR  RESET"
+	controls.text = "A / D  or  ARROWS   MOVE\nSPACE   JUMP\nTAB   CONTROL SWITCH\nQ   SHADOW SWAP   •   R   RESET"
 	controls.add_theme_font_size_override("font_size", 11)
 	controls.add_theme_color_override("font_color", Color("#8d99ad"))
 	canvas.add_child(controls)
 
+	objective_label = Label.new()
+	objective_label.position = Vector2(250, 120)
+	objective_label.size = Vector2(652, 28)
+	objective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	objective_label.add_theme_font_size_override("font_size", 15)
+	objective_label.add_theme_color_override("font_color", Color("#d8dfeb"))
+	canvas.add_child(objective_label)
+
 	message_label = Label.new()
-	message_label.position = Vector2(390, 116)
-	message_label.size = Vector2(372, 38)
+	message_label.position = Vector2(390, 148)
+	message_label.size = Vector2(372, 34)
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	message_label.add_theme_font_size_override("font_size", 18)
+	message_label.add_theme_font_size_override("font_size", 19)
 	message_label.add_theme_color_override("font_color", Color("#f4f7ff"))
 	canvas.add_child(message_label)
 
 	status_label = Label.new()
-	status_label.position = Vector2(48, 570)
-	status_label.size = Vector2(1056, 28)
+	status_label.position = Vector2(50, 574)
+	status_label.size = Vector2(1052, 26)
 	status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	status_label.add_theme_font_size_override("font_size", 14)
-	status_label.add_theme_color_override("font_color", Color("#aeb9ca"))
+	status_label.add_theme_font_size_override("font_size", 12)
+	status_label.add_theme_color_override("font_color", Color("#8d99ad"))
 	canvas.add_child(status_label)
 
 	win_panel = ColorRect.new()
-	win_panel.position = Vector2(320, 196)
-	win_panel.size = Vector2(512, 236)
-	win_panel.color = Color(0.05, 0.06, 0.10, 0.97)
+	win_panel.position = Vector2(308, 192)
+	win_panel.size = Vector2(536, 258)
+	win_panel.color = Color(0.04, 0.05, 0.08, 0.98)
 	win_panel.visible = false
 	canvas.add_child(win_panel)
 
 	win_title = Label.new()
-	win_title.position = Vector2(0, 34)
-	win_title.size = Vector2(512, 44)
+	win_title.position = Vector2(0, 32)
+	win_title.size = Vector2(536, 48)
 	win_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	win_title.add_theme_font_size_override("font_size", 34)
 	win_title.add_theme_color_override("font_color", Color("#f4f7ff"))
 	win_panel.add_child(win_title)
 
 	win_subtitle = Label.new()
-	win_subtitle.position = Vector2(24, 94)
-	win_subtitle.size = Vector2(464, 110)
+	win_subtitle.position = Vector2(30, 92)
+	win_subtitle.size = Vector2(476, 135)
 	win_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	win_subtitle.add_theme_font_size_override("font_size", 15)
 	win_subtitle.add_theme_color_override("font_color", Color("#aeb9ca"))
 	win_panel.add_child(win_subtitle)
+
+
+func update_ui():
+	if player == null or shadow == null or active_character == null:
+		return
+
+	if active_character == shadow:
+		active_label.text = "CONTROL: SHADOW"
+		active_label.add_theme_color_override("font_color", Color("#b993ff"))
+	else:
+		active_label.text = "CONTROL: REAL"
+		active_label.add_theme_color_override("font_color", Color("#55d6ff"))
+
+	var world_name = "REAL WORLD"
+	if int(active_character.get("world_id")) == SHADOW_WORLD:
+		world_name = "SHADOW WORLD"
+
+	status_label.text = "Current world: " + world_name + "    |    Swaps: " + str(swap_count) + "    |    Resets: " + str(reset_count)
 
 
 func _input(event):
@@ -236,11 +486,14 @@ func _input(event):
 		elif event.keycode == KEY_R:
 			reset_level()
 		elif event.keycode == KEY_ENTER and game_won:
-			reset_level()
+			if level_index + 1 < LEVEL_COUNT:
+				start_level(level_index + 1)
+			else:
+				start_level(0)
 
 
 func switch_control():
-	if game_won:
+	if game_won or resetting:
 		return
 
 	if active_character == player:
@@ -248,21 +501,29 @@ func switch_control():
 	else:
 		active_character = player
 
-	show_message("CONTROL: " + str(active_character.get("character_name")), 0.8)
+	show_message("CONTROL  →  " + str(active_character.get("character_name")), 0.75)
 	update_ui()
 
 
+func can_swap():
+	return not game_won and not resetting and player != null and shadow != null
+
+
 func swap_characters():
-	if game_won:
+	if not can_swap():
 		return
 
 	var player_position = player.global_position
 	var player_world = int(player.get("world_id"))
+	var shadow_position = shadow.global_position
+	var shadow_world = int(shadow.get("world_id"))
 
-	player.global_position = shadow.global_position
+	# The defining mechanic: swap both position and which version of the
+	# level each character currently occupies.
+	player.global_position = shadow_position
 	shadow.global_position = player_position
 
-	player.set_world(int(shadow.get("world_id")))
+	player.set_world(shadow_world)
 	shadow.set_world(player_world)
 
 	player.velocity = Vector2.ZERO
@@ -277,31 +538,29 @@ func swap_characters():
 
 
 func reset_level():
-	if game_won:
-		game_won = false
-		win_panel.visible = false
+	if resetting:
+		return
 
-	player.global_position = PLAYER_START
-	shadow.global_position = SHADOW_START
-
-	player.set_world(REAL_WORLD)
-	shadow.set_world(SHADOW_WORLD)
-
-	player.velocity = Vector2.ZERO
-	shadow.velocity = Vector2.ZERO
-
-	active_character = player
 	reset_count += 1
+	start_level(level_index)
 
-	if reset_count > 1:
-		show_message("RESET", 0.7)
 
-	update_ui()
-	queue_redraw()
+func player_hit(reason):
+	if game_won or resetting:
+		return
+
+	resetting = true
+	show_message(reason, 0.45)
+
+	await get_tree().create_timer(0.25).timeout
+
+	resetting = false
+	reset_count += 1
+	start_level(level_index)
 
 
 func _on_goal_body_entered(body):
-	if body != player or game_won:
+	if body != player or game_won or resetting:
 		return
 
 	game_won = true
@@ -309,9 +568,22 @@ func _on_goal_body_entered(body):
 	shadow.velocity = Vector2.ZERO
 
 	win_panel.visible = true
-	win_title.text = "LEVEL CLEAR"
-	win_subtitle.text = "You solved the first Shadow Swap puzzle.\n\nSwaps: " + str(swap_count) + "    Resets: " + str(reset_count) + "\n\nPress ENTER or R to restart."
-	status_label.text = "GOAL REACHED"
+
+	if level_index + 1 < LEVEL_COUNT:
+		win_title.text = "LEVEL %02d COMPLETE" % (level_index + 1)
+		win_subtitle.text = "Swaps: %d    |    Resets: %d\n\nThe next mechanic is waiting.\n\nPress ENTER for Level %02d." % [
+			swap_count,
+			reset_count,
+			level_index + 2
+		]
+	else:
+		win_title.text = "SHADOW SWAP COMPLETE"
+		win_subtitle.text = "You cleared all three prototype levels.\n\nSwaps: %d    |    Resets: %d\n\nPress ENTER to replay from Level 01." % [
+			swap_count,
+			reset_count
+		]
+
+	status_label.text = "GOAL REACHED  —  PRESS ENTER"
 	queue_redraw()
 
 
@@ -320,27 +592,11 @@ func show_message(text_value, duration):
 	message_time = duration
 
 
-func update_ui():
-	if player == null or shadow == null:
-		return
-
-	if active_character == shadow:
-		active_label.text = "CONTROL: SHADOW"
-		active_label.add_theme_color_override("font_color", Color("#b993ff"))
-	else:
-		active_label.text = "CONTROL: REAL"
-		active_label.add_theme_color_override("font_color", Color("#55d6ff"))
-
-	var world_name = "REAL WORLD"
-	if int(active_character.get("world_id")) == SHADOW_WORLD:
-		world_name = "SHADOW WORLD"
-
-	status_label.text = "Move the shadow onto the upper route, then press Q to swap into its position.    " + world_name
-
-
 func _process(delta):
+	pulse_time += delta
+
 	if swap_flash > 0.0:
-		swap_flash = maxf(swap_flash - delta * 2.4, 0.0)
+		swap_flash = maxf(swap_flash - delta * 2.8, 0.0)
 
 	if message_time > 0.0:
 		message_time = maxf(message_time - delta, 0.0)
@@ -352,27 +608,87 @@ func _process(delta):
 
 
 func _draw():
-	draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color("#0b0e14"))
+	draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color("#090c12"))
 
-	draw_rect(Rect2(0, 108, VIEW_SIZE.x / 2.0, VIEW_SIZE.y - 108), Color(0.05, 0.09, 0.12, 0.45))
-	draw_rect(Rect2(VIEW_SIZE.x / 2.0, 108, VIEW_SIZE.x / 2.0, VIEW_SIZE.y - 108), Color(0.10, 0.07, 0.14, 0.45))
+	draw_rect(
+		Rect2(0, 108, VIEW_SIZE.x / 2.0, VIEW_SIZE.y - 108),
+		Color(0.04, 0.09, 0.12, 0.56)
+	)
+
+	draw_rect(
+		Rect2(VIEW_SIZE.x / 2.0, 108, VIEW_SIZE.x / 2.0, VIEW_SIZE.y - 108),
+		Color(0.10, 0.065, 0.14, 0.56)
+	)
 
 	for x in range(0, int(VIEW_SIZE.x) + 1, 48):
-		draw_line(Vector2(x, 108), Vector2(x, VIEW_SIZE.y), Color(1, 1, 1, 0.025), 1.0)
+		draw_line(
+			Vector2(x, 108),
+			Vector2(x, VIEW_SIZE.y),
+			Color(1, 1, 1, 0.025),
+			1.0
+		)
 
 	for y in range(120, int(VIEW_SIZE.y) + 1, 48):
-		draw_line(Vector2(0, y), Vector2(VIEW_SIZE.x, y), Color(1, 1, 1, 0.025), 1.0)
+		draw_line(
+			Vector2(0, y),
+			Vector2(VIEW_SIZE.x, y),
+			Color(1, 1, 1, 0.025),
+			1.0
+		)
 
-	draw_line(Vector2(48, 126), Vector2(160, 126), Color("#55d6ff"), 3.0)
-	draw_line(Vector2(992, 126), Vector2(1104, 126), Color("#b993ff"), 3.0)
+	var pulse = 1.0 + sin(pulse_time * 3.0) * 0.08
 
-	draw_circle(goal_position, 42.0, Color(0.33, 0.84, 1.0, 0.035))
-	draw_arc(goal_position, 40.0, -PI / 2.0, PI * 1.5, 48, Color(0.33, 0.84, 1.0, 0.28), 2.0)
+	if goal_area != null and is_instance_valid(goal_area):
+		draw_circle(goal_position, 48.0 * pulse, Color(0.33, 0.84, 1.0, 0.035))
+		draw_arc(
+			goal_position,
+			38.0 * pulse,
+			-PI / 2.0,
+			PI * 1.5,
+			48,
+			Color(0.33, 0.84, 1.0, 0.34),
+			2.0
+		)
+		draw_arc(
+			goal_position,
+			31.0 * pulse,
+			0.0,
+			TAU,
+			40,
+			Color(0.33, 0.84, 1.0, 0.16),
+			1.0
+		)
 
 	if swap_flash > 0.0 and player != null and shadow != null:
-		var radius = lerpf(28.0, 180.0, 1.0 - swap_flash)
-		var alpha = swap_flash * 0.38
-		draw_circle(last_swap_midpoint, radius, Color(0.55, 0.75, 1.0, alpha), false, 5.0)
-		draw_line(player.global_position, shadow.global_position, Color(0.65, 0.78, 1.0, alpha), 2.0)
+		var radius = lerpf(22.0, 220.0, 1.0 - swap_flash)
+		var alpha = swap_flash * 0.42
 
-	draw_line(Vector2(40, 548), Vector2(1112, 548), Color(1, 1, 1, 0.05), 1.0)
+		draw_circle(
+			last_swap_midpoint,
+			radius,
+			Color(0.55, 0.75, 1.0, alpha),
+			false,
+			5.0
+		)
+
+		draw_circle(
+			last_swap_midpoint,
+			radius * 0.55,
+			Color(0.75, 0.85, 1.0, alpha * 0.55),
+			false,
+			2.0
+		)
+
+		draw_line(
+			player.global_position,
+			shadow.global_position,
+			Color(0.65, 0.78, 1.0, alpha),
+			2.0
+		)
+
+	draw_line(
+		Vector2(42, 552),
+		Vector2(1110, 552),
+		Color(1, 1, 1, 0.055),
+		1.0
+	)
