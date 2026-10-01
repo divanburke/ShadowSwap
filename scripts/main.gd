@@ -175,7 +175,7 @@ func build_level_03():
 	create_platform("R1", Vector2(180, 490), Vector2(180, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
 	create_platform("R2", Vector2(280, 400), Vector2(150, 20), REAL_WORLD, Color("#203c4b"), Color("#55d6ff"))
 
-	var shadow_gate = create_door(Vector2(850, 430), Vector2(30, 180), Color("#b993ff"))
+	var shadow_gate = create_door(Vector2(850, 425), Vector2(30, 300), Color("#b993ff"))
 	var real_switch = create_switch(Vector2(180, 545), false, "REAL SWITCH")
 	real_switch.connect_door(shadow_gate)
 
@@ -185,7 +185,7 @@ func build_level_03():
 	create_platform("S3", Vector2(790, 330), Vector2(110, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
 	create_platform("S4", Vector2(700, 260), Vector2(110, 20), SHADOW_WORLD, Color("#322848"), Color("#b993ff"))
 
-	var real_gate = create_door(Vector2(410, 400), Vector2(30, 180), Color("#55d6ff"))
+	var real_gate = create_door(Vector2(410, 425), Vector2(30, 300), Color("#55d6ff"))
 	var shadow_switch = create_switch(Vector2(700, 215), true, "SHADOW SWITCH")
 	shadow_switch.connect_door(real_gate)
 
