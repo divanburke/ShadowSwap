@@ -1,8 +1,8 @@
 # ShadowSwap
 
-ShadowSwap is a minimal 2D physics fighting game prototype with responsive movement and an articulated, human-like 2D ragdoll body.
+ShadowSwap is a minimal 2D physics fighting game prototype inspired by simple stick-fighter arena games.
 
-You control a stickman against an AI opponent. The core body is controlled directly for responsive movement, while the head, arms and legs stay physically connected and can detach during the fight.
+The player and AI use stable CharacterBody2D movement for reliable running and jumping. The visible stick-man body is procedurally animated, while knocked-off body parts become independent rigid bodies.
 
 ## Controls
 
@@ -13,24 +13,26 @@ You control a stickman against an AI opponent. The core body is controlled direc
 - **E** — Shadow Mode
 - **R** — reset the fight
 
-## Movement
+## Character physics
 
-The fighters are fully simulated rigid-body characters rather than sprites with a fixed pose.
+The connected fighter uses a physics-aware character controller instead of trying to balance several rigid bodies at once.
 
-- the torso can rotate and recover naturally
-- arms and legs swing under physics
-- joints have angular limits
-- body parts collide with the arena and each other
-- movement adds physical force instead of directly teleporting the body
-- momentum carries through jumps, landings, pushes and hits
+- acceleration and deceleration create momentum
+- gravity produces natural falling
+- jump buffering and coyote time make jumping responsive
+- releasing jump early produces a shorter jump
 - air control is weaker than ground control
-- losing a leg reduces movement speed
+- incoming attacks add knockback and short stagger
+- the character can collide with arena platforms and the other fighter
+- the stick-man arms and legs animate with the character's movement
+
+The controller is deliberately stable while the detached pieces use full rigid-body physics.
 
 ## Shadow Mode
 
 Shadow Mode lasts for a few seconds and gives the fighter:
 
-- complete temporary invulnerability
+- temporary invulnerability
 - stronger melee knockback
 - stronger melee damage
 - a visible purple state
@@ -48,9 +50,9 @@ The stickmen have:
 - left leg
 - right leg
 
-Body parts have their own health. When a part is lost, its physics joint is removed and the part becomes an independent physical object.
+Each part has its own durability. When a part is lost, a separate rigid-body piece is spawned at its current location and inherits the fighter's momentum.
 
-Losing an arm reduces available attacks. Losing a leg reduces movement. Losing the head or torso, or enough parts being detached, ends the round.
+Losing one leg reduces movement and jump strength. Losing both arms removes punching. Losing the head or torso, or enough parts being detached, ends the round.
 
 ## AI
 
@@ -73,8 +75,8 @@ The arena uses a simple dark-grey style with slightly rounded platform corners. 
 
 - `main.tscn` — main scene
 - `scripts/main.gd` — arena, UI, rounds
-- `scripts/fighter.gd` — player/AI movement, attacks, damage, Shadow Mode
-- `scripts/limb.gd` — physical body-part visuals and physics
+- `scripts/fighter.gd` — player/AI controller, movement, attacks, damage, Shadow Mode
+- `scripts/limb.gd` — detached body-part visuals and physics
 - `scripts/arena_platform.gd` — rounded physics platforms
 
-The project uses Godot 4.7-compatible 2D physics nodes and joints and intentionally starts without external art or audio assets.
+The project uses Godot 4.7-compatible 2D physics and intentionally starts without external art or audio assets.
