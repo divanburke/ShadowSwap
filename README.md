@@ -1,6 +1,6 @@
 # ShadowSwap
 
-ShadowSwap is a minimal 2D physics fighting game prototype with simple arcade movement and loose, physical stick-fighter body parts.
+ShadowSwap is a minimal 2D physics fighting game prototype with responsive movement and an articulated, human-like 2D ragdoll body.
 
 You control a stickman against an AI opponent. The core body is controlled directly for responsive movement, while the head, arms and legs stay physically connected and can detach during the fight.
 
@@ -15,13 +15,16 @@ You control a stickman against an AI opponent. The core body is controlled direc
 
 ## Movement
 
-The fighters use a responsive arcade controller rather than relying on raw forces for walking.
+The fighters are fully simulated rigid-body characters rather than sprites with a fixed pose.
 
-- running has acceleration and friction
+- the torso can rotate and recover naturally
+- arms and legs swing under physics
+- joints have angular limits
+- body parts collide with the arena and each other
+- movement adds physical force instead of directly teleporting the body
+- momentum carries through jumps, landings, pushes and hits
 - air control is weaker than ground control
-- jumping is limited to grounded fighters
-- losing one leg reduces movement speed
-- losing both legs leaves only very limited movement
+- losing a leg reduces movement speed
 
 ## Shadow Mode
 
