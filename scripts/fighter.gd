@@ -2,27 +2,28 @@ extends Node2D
 
 const LimbScript = preload("res://scripts/limb.gd")
 
-# Compact stick-fighter proportions.
+# Stick-fighter proportions.
 const BODY_SIZE = Vector2(14, 48)
 const HEAD_RADIUS = 14.0
 const ARM_SIZE = Vector2(8, 42)
 const LEG_SIZE = Vector2(9, 46)
 
-# Movement is intentionally direct and responsive, closer to an arcade fighter.
-const MOVE_FORCE = 1050.0
-const AIR_MOVE_FORCE = 620.0
+# Movement is applied as force so momentum, gravity, collisions and impacts
+# remain part of the same physics simulation.
+const MOVE_FORCE = 1150.0
+const AIR_MOVE_FORCE = 650.0
 const MAX_MOVE_SPEED = 300.0
-const GROUND_DRAG = 2.5
+const GROUND_DRAG = 2.8
 const AIR_DRAG = 0.55
 const JUMP_SPEED = 520.0
 const MAX_FALL_SPEED = 820.0
 
-# Soft balance forces keep the fighter naturally upright without hard-locking it.
-const BALANCE_STRENGTH = 2100.0
-const BALANCE_DAMPING = 105.0
+# Gentle balance assistance. The torso is never hard-set upright.
+const BALANCE_STRENGTH = 2400.0
+const BALANCE_DAMPING = 125.0
 
-const PUNCH_REACH = 62.0
-const KICK_REACH = 74.0
+const PUNCH_REACH = 64.0
+const KICK_REACH = 76.0
 
 var owner_game
 var is_player = false
@@ -97,15 +98,57 @@ func spawn_body(start_position):
 	parts["left_leg"] = create_part("left_leg", left_leg_position, LEG_SIZE, "rect")
 	parts["right_leg"] = create_part("right_leg", right_leg_position, LEG_SIZE, "rect")
 
-	joints["head"] = make_joint(parts["torso"], parts["head"], torso_position + Vector2(0, -25))
-	joints["left_arm"] = make_joint(parts["torso"], parts["left_arm"], torso_position + Vector2(-9, -17))
-	joints["right_arm"] = make_joint(parts["torso"], parts["right_arm"], torso_position + Vector2(9, -17))
-	joints["left_leg"] = make_joint(parts["torso"], parts["left_leg"], torso_position + Vector2(-6, 25))
-	joints["right_leg"] = make_joint(parts["torso"], parts["right_leg"], torso_position + Vector2(6, 25))
+	joints["head"] = make_joint(
+		parts["torso"],
+		parts["head"],
+		torso_position + Vector2(0, -25),
+		-0.45,
+		0.45
+	)
+
+	joints["left_arm"] = make_joint(
+		parts["torso"],
+		parts["left_arm"],
+		torso_position + Vector2(-9, -17),
+		-2.20,
+		1.10
+	)
+
+	joints["right_arm"] = make_joint(
+		parts["torso"],
+		parts["right_arm"],
+		torso_position + Vector2(9, -17),
+		-1.10,
+		2.20
+	)
+
+	joints["left_leg"] = make_joint(
+		parts["torso"],
+		parts["left_leg"],
+		torso_position + Vector2(-6, 25),
+		-1.15,
+		1.15
+	)
+
+	joints["right_leg"] = make_joint(
+		parts["torso"],
+		parts["right_leg"],
+		torso_position + Vector2(6, 25),
+		-1.15,
+		1.15
+	)
 
 	var torso = parts["torso"]
-	torso.linear_damp = 6.0
-	torso.angular_damp = 8.0
+	torso.linear_damp = 1.0
+	torso.angular_damp = 2.7
+
+	var ground_ray = RayCast2D.new()
+	ground_ray.name = "GroundRay"
+	ground_ray.position = Vector2(0, 18)
+	ground_ray.target_position = Vector2(0, 62)
+	ground_ray.collision_mask = 1
+	ground_ray.enabled = true
+	torso.add_child(ground_ray)
 
 
 func create_part(part_name, world_position, size_value, shape_kind):
@@ -125,7 +168,7 @@ func make_joint(body_a, body_b, anchor_position, lower_angle, upper_angle):
 	joint.angular_limit_enabled = true
 	joint.angular_limit_lower = lower_angle
 	joint.angular_limit_upper = upper_angle
-	joint.softness = 0.12
+	joint.softness = 0.15
 	add_child(joint)
 	joint.node_a = joint.get_path_to(body_a)
 	joint.node_b = joint.get_path_to(body_b)
@@ -142,6 +185,7 @@ func _physics_process(delta):
 
 	if shadow_mode_time > 0.0:
 		shadow_mode_time = maxf(shadow_mode_time - delta, 0.0)
+
 		if shadow_mode_time <= 0.0:
 			set_shadow_visual(false)
 
@@ -159,13 +203,13 @@ func handle_player_input():
 	if torso == null:
 		return
 
-	var move_direction = Input.get_axis("ui_left", "ui_right")
+	var move_direction = 0.0
 
-	# Also support A/D without requiring the user to configure Input Map actions.
-	if Input.is_key_pressed(KEY_A):
-		move_direction = -1.0
-	elif Input.is_key_pressed(KEY_D):
-		move_direction = 1.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		move_direction -= 1.0
+
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		move_direction += 1.0
 
 	if move_direction != 0.0:
 		facing = move_direction
@@ -213,40 +257,36 @@ func handle_ai(delta):
 	ai_think_timer -= delta
 	ai_jump_timer -= delta
 
-	if ai_think_timer <= 0.0:
-		ai_think_timer = ai_rng.randf_range(0.08, 0.18)
-
-		var desired = sign(dx)
-
-		# Give the AI room to react to an opponent in Shadow Mode.
-		if opponent.shadow_mode_time > 0.0 and distance < 180.0:
-			desired = -sign(dx)
-		elif distance < 120.0 and ai_rng.randf() < 0.18:
-			desired = -desired
-
-		if attack_cooldown <= 0.0 and distance < KICK_REACH + 12.0:
-			if ai_rng.randf() < 0.55:
-				try_attack("punch")
-			else:
-				try_attack("kick")
-
-		if shadow_mode_cooldown <= 0.0 and shadow_mode_time <= 0.0:
-			if distance < 190.0 and ai_rng.randf() < 0.12:
-				try_shadow_mode()
-
-		if ai_jump_timer <= 0.0 and ai_rng.randf() < 0.18:
-			ai_jump_timer = ai_rng.randf_range(0.7, 1.5)
-			if distance > 100.0 or opponent.is_attack_active():
-				try_jump()
-
-		set_ai_move(desired)
-
-
-func set_ai_move(direction):
-	if direction == 0.0:
+	if ai_think_timer > 0.0:
 		return
 
-	facing = direction
+	ai_think_timer = ai_rng.randf_range(0.08, 0.18)
+
+	var desired = sign(dx)
+
+	if opponent.shadow_mode_time > 0.0 and distance < 180.0:
+		desired = -sign(dx)
+	elif distance < 120.0 and ai_rng.randf() < 0.18:
+		desired = -desired
+
+	if attack_cooldown <= 0.0 and distance < KICK_REACH + 14.0:
+		if ai_rng.randf() < 0.55:
+			try_attack("punch")
+		else:
+			try_attack("kick")
+
+	if shadow_mode_cooldown <= 0.0 and shadow_mode_time <= 0.0:
+		if distance < 190.0 and ai_rng.randf() < 0.12:
+			try_shadow_mode()
+
+	if ai_jump_timer <= 0.0 and ai_rng.randf() < 0.18:
+		ai_jump_timer = ai_rng.randf_range(0.7, 1.5)
+
+		if distance > 100.0 or opponent.is_attack_active():
+			try_jump()
+
+	if desired != 0.0:
+		facing = desired
 
 
 func update_movement(delta):
@@ -259,63 +299,87 @@ func update_movement(delta):
 	if is_player:
 		if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
 			move_direction -= 1.0
+
 		if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 			move_direction += 1.0
 	else:
 		var opponent = owner_game.call("get_opponent", self)
+
 		if opponent != null and not opponent.defeated:
 			var opponent_torso = opponent.parts.get("torso")
-			if opponent_torso != null:
-				move_direction = sign(opponent_torso.global_position.x - torso.global_position.x)
 
-				if opponent.shadow_mode_time > 0.0 and absf(opponent_torso.global_position.x - torso.global_position.x) < 180.0:
+			if opponent_torso != null:
+				move_direction = sign(
+					opponent_torso.global_position.x - torso.global_position.x
+				)
+
+				var distance = absf(
+					opponent_torso.global_position.x - torso.global_position.x
+				)
+
+				if opponent.shadow_mode_time > 0.0 and distance < 180.0:
 					move_direction *= -1.0
 
-				if absf(opponent_torso.global_position.x - torso.global_position.x) < 82.0 and ai_rng.randf() < 0.12:
+				if distance < 82.0 and ai_rng.randf() < 0.10:
 					move_direction *= -1.0
 
 	var leg_factor = get_leg_factor()
-	var target_speed = move_direction * MOVE_SPEED * leg_factor
-	var accel = ACCELERATION
+	var grounded = is_grounded()
 
-	if not is_grounded():
-		accel = AIR_ACCELERATION
-
-	if move_direction == 0.0:
-		var friction = GROUND_FRICTION
-		if not is_grounded():
-			friction = AIR_FRICTION
-
+	if move_direction != 0.0:
+		var drive_force = MOVE_FORCE if grounded else AIR_MOVE_FORCE
+		torso.apply_central_force(
+			Vector2(move_direction * drive_force * leg_factor, 0.0)
+		)
+	else:
+		var drag = GROUND_DRAG if grounded else AIR_DRAG
 		torso.linear_velocity.x = move_toward(
 			torso.linear_velocity.x,
 			0.0,
-			friction * delta
+			MAX_MOVE_SPEED * drag * delta
 		)
-	else:
+
+	var speed_limit = MAX_MOVE_SPEED * leg_factor
+
+	if absf(torso.linear_velocity.x) > speed_limit:
 		torso.linear_velocity.x = move_toward(
 			torso.linear_velocity.x,
-			target_speed,
-			accel * delta
+			sign(torso.linear_velocity.x) * speed_limit,
+			100.0 * delta
 		)
 
 	torso.linear_velocity.y = minf(torso.linear_velocity.y, MAX_FALL_SPEED)
 
 
+func apply_balance():
+	var torso = parts.get("torso")
+
+	if torso == null or detached["torso"]:
+		return
+
+	# Physics-based stabilization: the body can fall over and get hit around,
+	# but a small restoring torque encourages a human standing posture.
+	var angle_error = wrapf(torso.rotation, -PI, PI)
+
+	var torque = -angle_error * BALANCE_STRENGTH
+	torque -= torso.angular_velocity * BALANCE_DAMPING
+
+	torso.apply_torque(torque)
+
+
 func is_grounded():
 	var torso = parts.get("torso")
+
 	if torso == null:
 		return false
 
 	var ray = torso.get_node_or_null("GroundRay") as RayCast2D
-	if ray == null:
-		ray = RayCast2D.new()
-		ray.name = "GroundRay"
-		ray.target_position = Vector2(0, 86)
-		ray.collision_mask = 1
-		ray.enabled = true
-		ray.position = Vector2(0, -2)
-		torso.add_child(ray)
 
+	if ray == null:
+		return false
+
+	# Keep the ray pointed down in world space even when the torso is tilted.
+	ray.global_rotation = 0.0
 	ray.force_raycast_update()
 
 	return ray.is_colliding()
@@ -328,17 +392,23 @@ func try_jump():
 	if detached["torso"]:
 		return
 
-	if get_leg_factor() <= 0.35:
+	var leg_factor = get_leg_factor()
+
+	if leg_factor <= 0.35:
 		return
 
 	var torso = parts.get("torso")
+
 	if torso == null or not is_grounded():
 		return
 
-	torso.apply_central_impulse(Vector2(
-		0.0,
-		-JUMP_SPEED * torso.mass * (0.82 + get_leg_factor() * 0.18)
-	))
+	torso.apply_central_impulse(
+		Vector2(
+			0.0,
+			-JUMP_SPEED * torso.mass * (0.88 + leg_factor * 0.12)
+		)
+	)
+
 	jump_cooldown = 0.34
 
 
@@ -356,21 +426,23 @@ func try_attack(kind):
 		return
 
 	var opponent = owner_game.call("get_opponent", self)
+
 	if opponent == null or opponent.defeated:
 		return
 
 	var torso = parts.get("torso")
+
 	if torso == null:
 		return
 
 	var reach = PUNCH_REACH
 	var damage = 1.0
 	var knockback = 470.0
-	var origin = torso.global_position + Vector2(facing * 26.0, 0)
+	var origin = torso.global_position + Vector2(facing * 25.0, -3.0)
 
 	if kind == "kick":
 		reach = KICK_REACH
-		origin += Vector2(0, 20)
+		origin += Vector2(0.0, 20.0)
 		knockback = 600.0
 
 	var target_name = find_target(opponent, origin, reach)
@@ -384,11 +456,13 @@ func try_attack(kind):
 			if direction == 0.0:
 				direction = facing
 
-			var vertical = -0.15
+			var vertical = -0.12
+
 			if kind == "kick":
-				vertical = -0.30
+				vertical = -0.28
 
 			var boost = 1.0
+
 			if shadow_mode_time > 0.0:
 				boost = 1.4
 				damage = 1.35
@@ -398,10 +472,17 @@ func try_attack(kind):
 				knockback * vertical * boost
 			)
 
-			opponent.receive_hit(target_name, damage, impulse, kind)
+			opponent.receive_hit(
+				target_name,
+				damage,
+				impulse,
+				kind
+			)
 
-			# Small recoil makes attacks feel physical without destroying control.
-			torso.linear_velocity.x -= facing * 38.0
+			# Recoil comes from physics too, instead of teleporting the attacker.
+			torso.apply_central_impulse(
+				Vector2(-facing * 32.0, -12.0)
+			)
 
 	attack_cooldown = 0.34 if kind == "punch" else 0.48
 
@@ -415,6 +496,7 @@ func find_target(opponent, origin, reach):
 			continue
 
 		var part = opponent.parts.get(part_name)
+
 		if part == null:
 			continue
 
@@ -424,13 +506,13 @@ func find_target(opponent, origin, reach):
 		if distance > reach:
 			continue
 
-		# Prefer targets in front of the attacker, like a simple fighting hitbox.
-		var front_score = 0.0
+		# Hits favour the side the fighter is facing.
+		var side_penalty = 0.0
 
-		if offset.x * facing < -6.0:
-			front_score = 22.0
+		if offset.x * facing < -8.0:
+			side_penalty = 22.0
 
-		var score = distance + front_score
+		var score = distance + side_penalty
 
 		if score < best_score:
 			best_score = score
@@ -456,11 +538,13 @@ func receive_hit(part_name, damage, impulse, attack_kind):
 	health[part_name] -= damage
 
 	var target = parts.get(part_name)
+
 	if target != null:
 		target.flash_hit()
 		target.apply_central_impulse(impulse)
 
 	var torso = parts.get("torso")
+
 	if torso != null and not detached["torso"]:
 		torso.apply_central_impulse(impulse * 0.18)
 
@@ -468,7 +552,12 @@ func receive_hit(part_name, damage, impulse, attack_kind):
 		detach_part(part_name)
 
 	if attack_kind != "":
-		owner_game.call("report_hit", fighter_name, part_name, attack_kind)
+		owner_game.call(
+			"report_hit",
+			fighter_name,
+			part_name,
+			attack_kind
+		)
 
 
 func detach_part(part_name):
@@ -478,18 +567,23 @@ func detach_part(part_name):
 	detached[part_name] = true
 
 	var joint = joints.get(part_name)
+
 	if joint != null:
 		joint.queue_free()
 		joints[part_name] = null
 
 	var limb = parts.get(part_name)
+
 	if limb != null:
-		limb.collision_mask = 1
+		limb.collision_mask = 3
 		limb.collision_layer = 2
-		limb.apply_central_impulse(Vector2(
-			facing * 120.0,
-			-140.0
-		))
+
+		limb.apply_central_impulse(
+			Vector2(
+				facing * 120.0,
+				-140.0
+			)
+		)
 
 	owner_game.call("part_lost", self, part_name)
 
@@ -499,7 +593,10 @@ func detach_part(part_name):
 		defeated = true
 
 	if defeated:
-		owner_game.call_deferred("fighter_defeated", self)
+		owner_game.call_deferred(
+			"fighter_defeated",
+			self
+		)
 
 
 func get_detached_count():
@@ -526,7 +623,11 @@ func get_leg_factor():
 
 
 func can_shadow_mode():
-	return shadow_mode_cooldown <= 0.0 and shadow_mode_time <= 0.0 and not defeated
+	return (
+		shadow_mode_cooldown <= 0.0
+		and shadow_mode_time <= 0.0
+		and not defeated
+	)
 
 
 func try_shadow_mode():
@@ -542,6 +643,7 @@ func try_shadow_mode():
 func set_shadow_visual(value):
 	for part_name in parts.keys():
 		var limb = parts[part_name]
+
 		if limb != null:
 			limb.set_shadowed(value)
 
