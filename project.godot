@@ -1,11 +1,10 @@
-; Engine configuration file.
-; Shadow Swap prototype configuration.
+; ShadowSwap - physics fighting prototype
 
 config_version=5
 
 [application]
 
-config/name="Shadow Swap"
+config/name="ShadowSwap"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 run/main_scene="res://main.tscn"
 config/icon="res://icon.svg"
@@ -18,6 +17,10 @@ window/size/window_width_override=1152
 window/size/window_height_override=648
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+
+[physics]
+
+2d/default_gravity=1150.0
 
 [rendering]
 
