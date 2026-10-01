@@ -16,15 +16,36 @@ func setup(p_name, p_size, p_color, p_accent, p_shape_kind):
 	accent_color = p_accent
 	shape_kind = p_shape_kind
 
-	mass = 0.8
+	match part_name:
+		"torso":
+			mass = 1.30
+			linear_damp = 1.20
+			angular_damp = 2.80
+		"head":
+			mass = 0.55
+			linear_damp = 1.40
+			angular_damp = 2.20
+		"left_arm", "right_arm":
+			mass = 0.32
+			linear_damp = 1.70
+			angular_damp = 2.40
+		"left_leg", "right_leg":
+			mass = 0.48
+			linear_damp = 1.45
+			angular_damp = 2.60
+		_:
+			mass = 0.60
+			linear_damp = 1.50
+			angular_damp = 2.50
+
 	gravity_scale = 1.0
-	linear_damp = 2.4
-	angular_damp = 3.0
 	can_sleep = false
 	continuous_cd = RigidBody2D.CCD_MODE_CAST_RAY
 
+	# Layer 1 is the arena. Layer 2 is other fighter body parts.
+	# This lets characters push against platforms and each other.
 	collision_layer = 2
-	collision_mask = 1
+	collision_mask = 3
 
 	var collision = CollisionShape2D.new()
 	var shape
