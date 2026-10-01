@@ -155,6 +155,7 @@ func build_level_02():
 	create_hazard(Vector2(995, 560), Vector2(90, 12), SHADOW_WORLD, "SHADOW SPIKES")
 
 	create_goal()
+	build_characters_for_level()
 
 	set_objective(
 		"Park the Shadow on the purple switch to open the real door.",
