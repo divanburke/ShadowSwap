@@ -119,7 +119,7 @@ func build_ui():
 
 	var subtitle = Label.new()
 	subtitle.position = Vector2(46, 69)
-	subtitle.text = "PHYSICS FIGHTER  |  BUILD 01"
+	subtitle.text = "ARCADE PHYSICS FIGHTER  |  BUILD 02"
 	subtitle.add_theme_font_size_override("font_size", 11)
 	subtitle.add_theme_color_override("font_color", Color("#7f8b9e"))
 	ui_layer.add_child(subtitle)
@@ -172,7 +172,7 @@ func build_ui():
 	instruction_label.position = Vector2(48, 572)
 	instruction_label.size = Vector2(1056, 28)
 	instruction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	instruction_label.text = "A / D or ARROWS MOVE     UP ARROW JUMP     J PUNCH     K KICK     E SHADOW MODE     R RESET"
+	instruction_label.text = "A / D or ARROWS MOVE     UP / W JUMP     J PUNCH     K KICK     E SHADOW MODE     R RESET"
 	instruction_label.add_theme_font_size_override("font_size", 11)
 	instruction_label.add_theme_color_override("font_color", Color("#8d99ad"))
 	ui_layer.add_child(instruction_label)
