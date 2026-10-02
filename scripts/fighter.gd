@@ -1,4 +1,4 @@
-extends CharacterBody2D
+extends RigidBody2D
 
 # ShadowSwap - simple one-player stick fighter foundation.
 #
@@ -92,10 +92,10 @@ const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
 
 # Whole-body pose physics. The collision stays upright, but the visible
 # stick figure can lean, sway and settle like a loose body.
-const BODY_ANGULAR_SPRING = 19.0
-const BODY_ANGULAR_DAMPING = 3.0
-const BODY_MAX_ANGLE = deg_to_rad(21.0)
-const BODY_AIR_MAX_ANGLE = deg_to_rad(55.0)
+const BODY_ANGULAR_SPRING = 7.5
+const BODY_ANGULAR_DAMPING = 2.2
+const BODY_MAX_ANGLE = deg_to_rad(30.0)
+const BODY_AIR_MAX_ANGLE = deg_to_rad(100.0)
 const BODY_ACCEL_LEAN = 0.00055
 const BODY_SPEED_LEAN = 0.0010
 
@@ -105,7 +105,6 @@ const BODY_MAX_BOB = 5.0
 
 var facing = 1.0
 var body_angle = 0.0
-var body_angular_velocity = 0.0
 var body_bob = 0.0
 var body_bob_velocity = 0.0
 
@@ -139,13 +138,14 @@ func setup(start_position):
 	global_position = start_position
 
 	collision_layer = 2
-	collision_mask = 3
-
-	motion_mode = CharacterBody2D.MOTION_MODE_GROUNDED
-	floor_stop_on_slope = true
-	floor_snap_length = 8.0
-	floor_max_angle = deg_to_rad(50.0)
-	safe_margin = 0.08
+	collision_mask = 1
+	mass = 3.0
+	gravity_scale = 1.30
+	linear_damp = 0.08
+	angular_damp = 1.8
+	continuous_cd = RigidBody2D.CCD_MODE_CAST_RAY
+	can_sleep = false
+	lock_rotation = false
 
 	build_collision()
 	reset_limb_positions()
@@ -194,6 +194,7 @@ func _physics_process(delta):
 	read_input()
 	update_movement(delta)
 	update_limb_physics(delta)
+	previous_floor_state = grounded
 
 	if attack_timer > 0.0:
 		attack_timer = maxf(attack_timer - delta, 0.0)
@@ -223,8 +224,8 @@ func read_input():
 	if jump_down and not jump_was_down:
 		try_jump()
 
-	if not jump_down and jump_was_down and velocity.y < -180.0:
-		velocity.y *= 0.48
+	if not jump_down and jump_was_down and linear_velocity.y < -180.0:
+		linear_velocity.y *= 0.48
 
 	if Input.is_key_pressed(KEY_J) and attack_cooldown <= 0.0:
 		start_attack()
@@ -241,54 +242,66 @@ func update_movement(delta):
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		move_direction += 1.0
 
-	var on_floor = is_on_floor()
+	var acceleration = GROUND_ACCELERATION if grounded else AIR_ACCELERATION
+	var braking = GROUND_DECELERATION if grounded else AIR_DECELERATION
 
 	if move_direction != 0.0:
-		var acceleration = GROUND_ACCELERATION
-
-		if not on_floor:
-			acceleration = AIR_ACCELERATION
-
-		velocity.x = move_toward(
-			velocity.x,
-			move_direction * MOVE_SPEED,
-			acceleration * delta
-		)
+		var speed_error = move_direction * MOVE_SPEED - linear_velocity.x
+		var force = speed_error * mass * acceleration
+		apply_central_force(Vector2(force, 0.0))
 	else:
-		var deceleration = GROUND_DECELERATION
+		# Keep some momentum in the air, but brake more strongly on the floor.
+		var brake_force = -linear_velocity.x * mass * braking
+		apply_central_force(Vector2(brake_force, 0.0))
 
-		if not on_floor:
-			deceleration = AIR_DECELERATION
-
-		velocity.x = move_toward(
-			velocity.x,
-			0.0,
-			deceleration * delta
+	if fast_fall and not grounded:
+		apply_central_force(
+			Vector2(0.0, mass * FAST_FALL_ACCELERATION)
 		)
 
-	if not on_floor:
-		velocity.y += GRAVITY * delta
+	# Soft speed limiting preserves momentum instead of clamping it.
+	if absf(linear_velocity.x) > MAX_HORIZONTAL_SPEED:
+		var excess = absf(linear_velocity.x) - MAX_HORIZONTAL_SPEED
+		apply_central_force(
+			Vector2(
+				-sign(linear_velocity.x) * excess * mass * 2.0,
+				0.0
+			)
+		)
 
-		if fast_fall:
-			velocity.y += FAST_FALL_ACCELERATION * delta
-
-		# Contact with a wall slows the fall, while normal horizontal
-		# momentum is preserved for the wall jump.
-		var wall_side = detect_wall_side()
-		if wall_side != 0.0 and velocity.x * wall_side > -20.0:
-			velocity.y = minf(velocity.y, WALL_SLIDE_SPEED)
-
-	velocity.y = minf(velocity.y, MAX_FALL_SPEED)
-
-	move_and_slide()
+	# Wall contact changes the fall speed without deleting horizontal momentum.
+	var wall_side = detect_wall_side()
+	if not grounded and wall_side != 0.0 and linear_velocity.x * wall_side > -20.0:
+		if linear_velocity.y > WALL_SLIDE_SPEED:
+			linear_velocity.y = move_toward(
+				linear_velocity.y,
+				WALL_SLIDE_SPEED,
+				1200.0 * delta
+			)
 
 	wall_jump_cooldown = maxf(
 		wall_jump_cooldown - delta,
 		0.0
 	)
 
-	if is_on_floor() and absf(velocity.x) < 2.0:
-		velocity.x = 0.0
+
+func detect_grounded():
+	var origin = global_position + Vector2(
+		0.0,
+		BODY_HEIGHT * 0.46
+	)
+	var target = origin + Vector2(0.0, 18.0)
+
+	var query = PhysicsRayQueryParameters2D.create(
+		origin,
+		target
+	)
+	query.collision_mask = 1
+	query.exclude = [get_rid()]
+
+	var hit = get_world_2d().direct_space_state.intersect_ray(query)
+
+	return not hit.is_empty()
 
 
 func detect_wall_side():
@@ -322,8 +335,10 @@ func detect_wall_side():
 
 
 func try_jump():
-	if is_on_floor():
-		velocity.y = -JUMP_SPEED
+	if grounded:
+		apply_central_impulse(
+			Vector2(0.0, -JUMP_SPEED * mass)
+		)
 		return
 
 	if wall_jump_cooldown > 0.0:
@@ -332,8 +347,16 @@ func try_jump():
 	var wall_side = detect_wall_side()
 
 	if wall_side != 0.0:
-		velocity.x = -wall_side * WALL_JUMP_HORIZONTAL_SPEED
-		velocity.y = -WALL_JUMP_VERTICAL_SPEED
+		var current = linear_velocity
+		var target = Vector2(
+			-wall_side * WALL_JUMP_HORIZONTAL_SPEED,
+			-WALL_JUMP_VERTICAL_SPEED
+		)
+
+		apply_central_impulse(
+			(target - current) * mass
+		)
+
 		facing = -wall_side
 		wall_jump_cooldown = WALL_JUMP_COOLDOWN
 
@@ -345,7 +368,7 @@ func start_attack():
 
 func update_limb_physics(delta):
 	var speed_ratio = clampf(
-		absf(velocity.x) / MOVE_SPEED,
+		absf(linear_velocity.x) / MOVE_SPEED,
 		0.0,
 		1.0
 	)
@@ -353,9 +376,9 @@ func update_limb_physics(delta):
 	var acceleration = Vector2.ZERO
 
 	if delta > 0.0:
-		acceleration = (velocity - previous_velocity) / delta
+		acceleration = (linear_velocity - previous_velocity) / delta
 
-	previous_velocity = velocity
+	previous_velocity = linear_velocity
 
 	update_body_floppiness(
 		delta,
@@ -394,9 +417,9 @@ func update_limb_physics(delta):
 	left_hand_velocity.y += ARM_GRAVITY * delta
 	right_hand_velocity.y += ARM_GRAVITY * delta
 
-	if not is_on_floor():
+	if not grounded:
 		var air_motion = clampf(
-			velocity.y / JUMP_SPEED,
+			linear_velocity.y / JUMP_SPEED,
 			-1.0,
 			1.0
 		)
@@ -652,22 +675,18 @@ func solve_leg(hip, ankle, bend_direction):
 
 
 func update_body_floppiness(delta, acceleration):
-	# Forward acceleration tips the body backward; braking lets it swing
-	# forward and settle instead of snapping straight.
-	var maximum_angle = BODY_MAX_ANGLE if is_on_floor() else BODY_AIR_MAX_ANGLE
+	var maximum_angle = BODY_MAX_ANGLE if grounded else BODY_AIR_MAX_ANGLE
 
 	var target_angle = (
-		-velocity.x * BODY_SPEED_LEAN -
+		-linear_velocity.x * BODY_SPEED_LEAN -
 		acceleration.x * BODY_ACCEL_LEAN
 	)
 
-	# Airborne characters can rotate substantially farther than when
-	# standing, which gives impacts and jumps the loose physics feel.
-	if not is_on_floor():
+	if not grounded:
 		target_angle += clampf(
-			velocity.y * 0.00034,
-			-deg_to_rad(10.0),
-			deg_to_rad(10.0)
+			linear_velocity.y * 0.00034,
+			-deg_to_rad(14.0),
+			deg_to_rad(14.0)
 		)
 
 	target_angle = clampf(
@@ -676,26 +695,27 @@ func update_body_floppiness(delta, acceleration):
 		maximum_angle
 	)
 
-	var angle_acceleration = (
-		target_angle - body_angle
-	) * BODY_ANGULAR_SPRING
-	angle_acceleration -= body_angular_velocity * BODY_ANGULAR_DAMPING
-
-	body_angular_velocity += angle_acceleration * delta
-	body_angle += body_angular_velocity * delta
-	body_angle = clampf(
-		body_angle,
-		-BODY_MAX_ANGLE * 1.15,
-		BODY_MAX_ANGLE * 1.15
+	var angle_error = wrapf(
+		target_angle - rotation,
+		-PI,
+		PI
 	)
 
-	# Soft vertical compression/extension makes the torso react to movement
-	# and landings instead of remaining visually rigid.
+	var upright_torque = (
+		angle_error * BODY_ANGULAR_SPRING -
+		angular_velocity * BODY_ANGULAR_DAMPING
+	)
+
+	apply_torque(upright_torque)
+
+	# The visible pose follows the real rigidbody rotation.
+	body_angle = rotation
+
 	var target_bob = 0.0
 
-	if is_on_floor():
+	if grounded:
 		target_bob = clampf(
-			absf(velocity.x) * 0.012,
+			absf(linear_velocity.x) * 0.010,
 			0.0,
 			BODY_MAX_BOB
 		)
@@ -706,7 +726,11 @@ func update_body_floppiness(delta, acceleration):
 				0.0,
 				MAX_FALL_SPEED
 			)
-			body_bob_velocity -= lerpf(32.0, 58.0, landing_speed / MAX_FALL_SPEED)
+			body_bob_velocity -= lerpf(
+				30.0,
+				60.0,
+				landing_speed / MAX_FALL_SPEED
+			)
 
 	var bob_acceleration = (
 		target_bob - body_bob
@@ -715,12 +739,12 @@ func update_body_floppiness(delta, acceleration):
 
 	body_bob_velocity += bob_acceleration * delta
 	body_bob += body_bob_velocity * delta
+
 	body_bob = clampf(
 		body_bob,
 		-BODY_MAX_BOB,
 		BODY_MAX_BOB
 	)
-
 
 func pose_point(point):
 	var pivot = Vector2(0.0, HIP_Y)
