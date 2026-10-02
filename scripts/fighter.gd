@@ -58,10 +58,10 @@ const WALL_CHECK_DISTANCE = 27.0
 
 # Torque drives are intentionally softer in the air. This lets the body
 # flop, rotate and recover instead of behaving like a rigid animated sprite.
-const TORSO_GROUND_STRENGTH = 105.0
-const TORSO_GROUND_DAMPING = 12.0
-const TORSO_AIR_STRENGTH = 38.0
-const TORSO_AIR_DAMPING = 4.0
+const TORSO_GROUND_STRENGTH = 420.0
+const TORSO_GROUND_DAMPING = 42.0
+const TORSO_AIR_STRENGTH = 90.0
+const TORSO_AIR_DAMPING = 8.0
 
 const LIMB_GROUND_STRENGTH = 34.0
 const LIMB_GROUND_DAMPING = 3.8
@@ -139,7 +139,7 @@ func build_ragdoll(start_position):
 	material.bounce = 0.0
 
 	# Main collision body. Only this and the head collide with the level.
-	var torso_position = start_position + Vector2(0.0, 22.0)
+	var torso_position = start_position + Vector2(0.0, 20.0)
 
 	var torso = create_capsule(
 		"Torso",
@@ -151,6 +151,9 @@ func build_ragdoll(start_position):
 		true,
 		material
 	)
+
+	torso.angular_damp = 2.0
+	torso.continuous_cd = RigidBody2D.CCD_MODE_CAST_RAY
 
 	var head = create_circle(
 		"Head",
