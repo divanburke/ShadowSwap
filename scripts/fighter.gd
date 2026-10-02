@@ -187,22 +187,22 @@ func get_point(name):
 
 	# Knees move less than the feet, producing a natural bent-leg gait.
 	var left_knee = Vector2(
-		-5.0 + stride * 0.48,
+		-8.0 + stride * 0.48,
 		24.0 - left_lift
 	)
 
 	var right_knee = Vector2(
-		5.0 + opposite_stride * 0.48,
+		8.0 + opposite_stride * 0.48,
 		24.0 - right_lift
 	)
 
 	var left_foot = Vector2(
-		-5.0 + stride,
+		-11.0 + stride,
 		49.0 - left_lift
 	)
 
 	var right_foot = Vector2(
-		5.0 + opposite_stride,
+		11.0 + opposite_stride,
 		49.0 - right_lift
 	)
 
@@ -210,22 +210,22 @@ func get_point(name):
 	var arm_stride = stride * 0.72
 
 	var left_elbow = Vector2(
-		-10.0 - arm_stride * 0.45,
+		-13.0 - arm_stride * 0.45,
 		-13.0
 	)
 
 	var right_elbow = Vector2(
-		10.0 + arm_stride * 0.45,
+		13.0 + arm_stride * 0.45,
 		-13.0
 	)
 
 	var left_hand = Vector2(
-		-19.0 - arm_stride,
+		-24.0 - arm_stride,
 		-1.0
 	)
 
 	var right_hand = Vector2(
-		19.0 + arm_stride,
+		24.0 + arm_stride,
 		-1.0
 	)
 
@@ -275,10 +275,10 @@ func get_point(name):
 			return right_hand + Vector2(0.0, body_bob)
 
 		"left_hip":
-			return Vector2(-5.0, 16.0 + body_bob)
+			return Vector2(0.0, 16.0 + body_bob)
 
 		"right_hip":
-			return Vector2(5.0, 16.0 + body_bob)
+			return Vector2(0.0, 16.0 + body_bob)
 
 		"left_knee":
 			return left_knee + Vector2(0.0, body_bob)
