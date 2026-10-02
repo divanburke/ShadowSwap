@@ -34,14 +34,14 @@ const LEG_THICKNESS := 4.5
 const THIGH_LENGTH := BODY_HEIGHT * 0.34
 const SHIN_LENGTH := BODY_HEIGHT * 0.31
 
-const ARM_SPRING := 42.0
-const ARM_DAMPING := 8.0
-const LEG_SPRING := 75.0
-const LEG_DAMPING := 11.0
-const BODY_UPRIGHT_SPRING := 95.0
-const BODY_UPRIGHT_DAMPING := 12.0
-const HEAD_SPRING := 55.0
-const HEAD_DAMPING := 8.0
+const ARM_SPRING := 90.0
+const ARM_DAMPING := 16.0
+const LEG_SPRING := 180.0
+const LEG_DAMPING := 24.0
+const BODY_UPRIGHT_SPRING := 180.0
+const BODY_UPRIGHT_DAMPING := 22.0
+const HEAD_SPRING := 100.0
+const HEAD_DAMPING := 16.0
 
 const WALK_SPEED := 7.0
 const WALK_STRIDE := 17.0
@@ -220,12 +220,12 @@ func build_ragdoll():
 		part.contact_monitor = true
 		part.max_contacts_reported = 4
 		part.linear_damp = 0.45
-		part.angular_damp = 1.4
+		part.angular_damp = 3.5
 		part.gravity_scale = 1.0
 
 	# Make the torso the main controlled mass. Limbs remain physically simulated.
 	torso.linear_damp = 0.7
-	torso.angular_damp = 2.0
+	torso.angular_damp = 4.5
 
 
 func make_capsule(
@@ -294,6 +294,9 @@ func connect_pin(a: RigidBody2D, b: RigidBody2D, anchor: Vector2):
 	joint.node_a = a.get_path()
 	joint.node_b = b.get_path()
 	joint.softness = 0.0
+	joint.angular_limit_enabled = true
+	joint.angular_limit_lower = -0.65
+	joint.angular_limit_upper = 0.65
 	add_child(joint)
 	joints.append(joint)
 
@@ -437,6 +440,11 @@ func update_ragdoll_pose(delta: float):
 		BODY_UPRIGHT_SPRING,
 		BODY_UPRIGHT_DAMPING
 	)
+	# Keep the torso from tipping into a horizontal pile while still allowing
+	# visible lean and impact motion.
+	if absf(torso.global_rotation) > deg_to_rad(32.0):
+		var correction := -signf(torso.global_rotation) * 80.0
+		torso.apply_torque(correction)
 
 	# --------------------------------------------------------------
 	# Head: loose but follows the torso.
