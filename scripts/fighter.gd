@@ -48,9 +48,9 @@ const ARM_THICKNESS = BODY_WIDTH * 0.25
 const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
 
-const ARM_SPRING = 24.0
-const ARM_DAMPING = 5.2
-const ARM_GRAVITY = 620.0
+const ARM_SPRING = 20.0
+const ARM_DAMPING = 4.6
+const ARM_GRAVITY = 680.0
 
 # -------------------------------------------------------------------------
 # Legs
@@ -68,10 +68,9 @@ const ANKLE_BASE_X = BODY_WIDTH * 0.34
 const ANKLE_BASE_Y = BODY_HEIGHT * 0.53
 const WALK_STRIDE = BODY_HEIGHT * 0.15
 const WALK_LIFT = BODY_HEIGHT * 0.075
-const FOOT_LENGTH = BODY_HEIGHT * 0.11
 
-const FOOT_SPRING = 58.0
-const FOOT_DAMPING = 9.0
+const FOOT_SPRING = 48.0
+const FOOT_DAMPING = 8.0
 
 var facing = 1.0
 
@@ -540,18 +539,6 @@ func get_point(name):
 		"right_ankle":
 			return right_ankle_offset
 
-		"left_foot":
-			return left_ankle_offset + Vector2(
-				facing * FOOT_LENGTH,
-				0.0
-			)
-
-		"right_foot":
-			return right_ankle_offset + Vector2(
-				facing * FOOT_LENGTH,
-				0.0
-			)
-
 	return Vector2.ZERO
 
 
@@ -571,8 +558,6 @@ func _draw():
 	var right_knee = get_point("right_knee")
 	var left_ankle = get_point("left_ankle")
 	var right_ankle = get_point("right_ankle")
-	var left_foot = get_point("left_foot")
-	var right_foot = get_point("right_foot")
 
 	# Limbs first, torso second. This hides the roots cleanly.
 	draw_pill(
@@ -618,21 +603,7 @@ func _draw():
 		color
 	)
 
-	# Minimal horizontal feet.
-	draw_pill(
-		left_ankle,
-		left_foot,
-		LEG_THICKNESS,
-		color
-	)
-
-	draw_pill(
-		right_ankle,
-		right_foot,
-		LEG_THICKNESS,
-		color
-	)
-
+	# Legs end cleanly at the ankles. There are no separate feet.
 	# Short, narrow upright torso.
 	draw_pill(
 		Vector2(0.0, SHOULDER_Y - 3.0),
