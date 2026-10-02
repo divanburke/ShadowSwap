@@ -20,7 +20,7 @@ const HEAD_RADIUS = 10.5
 
 const SHOULDER_OFFSET = Vector2(0.0, -16.0)
 const HIP_OFFSET = Vector2(0.0, 8.0)
-const HEAD_OFFSET = Vector2(0.0, -42.0)
+const HEAD_OFFSET = Vector2(0.0, -16.0)
 
 const UPPER_ARM_LENGTH = 22.0
 const FOREARM_LENGTH = 23.0
@@ -423,6 +423,9 @@ func create_segment(
 	shape.radius = width * 0.5
 	shape.height = length
 	collision.shape = shape
+	# CapsuleShape2D is vertical by default; rotate the local shape so its
+	# long axis follows body.rotation, which stores the segment's world angle.
+	collision.rotation = -PI * 0.5
 
 	body.add_child(collision)
 	add_child(body)
