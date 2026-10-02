@@ -20,7 +20,7 @@ const HEAD_RADIUS = 10.5
 
 const SHOULDER_OFFSET = Vector2(0.0, -16.0)
 const HIP_OFFSET = Vector2(0.0, 8.0)
-const HEAD_OFFSET = Vector2(0.0, -16.0)
+const HEAD_OFFSET = Vector2(0.0, -39.0)
 
 const UPPER_ARM_LENGTH = 22.0
 const FOREARM_LENGTH = 23.0
@@ -139,7 +139,7 @@ func build_ragdoll(start_position):
 	material.bounce = 0.0
 
 	# Main collision body. Only this and the head collide with the level.
-	var torso_position = start_position + Vector2(0.0, 20.0)
+	var torso_position = start_position
 
 	var torso = create_capsule(
 		"Torso",
@@ -221,17 +221,26 @@ func build_ragdoll(start_position):
 		material
 	)
 
-	var right_thigh_dir = Vector2.RIGHT.rotated(deg_to_rad(76.0))
-	var left_thigh_dir = Vector2.RIGHT.rotated(deg_to_rad(104.0))
+	var right_ankle = hip + Vector2(13.0, 35.0)
+	var left_ankle = hip + Vector2(-13.0, 35.0)
 
-	var right_knee = hip + right_thigh_dir * THIGH_LENGTH
-	var left_knee = hip + left_thigh_dir * THIGH_LENGTH
+	var right_knee = solve_initial_leg_joint(
+		hip,
+		right_ankle,
+		1.0
+	)
 
-	var right_shin_dir = Vector2.RIGHT.rotated(deg_to_rad(105.0))
-	var left_shin_dir = Vector2.RIGHT.rotated(deg_to_rad(75.0))
+	var left_knee = solve_initial_leg_joint(
+		hip,
+		left_ankle,
+		-1.0
+	)
 
-	var right_ankle = right_knee + right_shin_dir * SHIN_LENGTH
-	var left_ankle = left_knee + left_shin_dir * SHIN_LENGTH
+	var right_thigh_dir = (right_knee - hip).normalized()
+	var left_thigh_dir = (left_knee - hip).normalized()
+
+	var right_shin_dir = (right_ankle - right_knee).normalized()
+	var left_shin_dir = (left_ankle - left_knee).normalized()
 
 	var right_thigh = create_segment(
 		"RightThigh",
@@ -273,11 +282,21 @@ func build_ragdoll(start_position):
 		material
 	)
 
+	# Legs interact with the floor so the feet cannot simply pass through it.
+	for key in [
+		"RightThigh",
+		"LeftThigh",
+		"RightShin",
+		"LeftShin"
+	]:
+		parts[key].collision_layer = 2
+		parts[key].collision_mask = 1
+
 	# Add joints after all bodies exist so their paths are valid.
 	make_pin_joint(
 		torso,
 		head,
-		torso_position + Vector2(0.0, -TORSO_HEIGHT * 0.5),
+		torso_position + Vector2(0.0, -TORSO_HEIGHT * 0.5 + 2.0),
 		0.0
 	)
 
@@ -827,6 +846,48 @@ func respawn():
 
 	build_ragdoll(spawn_position)
 	queue_redraw()
+
+
+func solve_initial_leg_joint(hip, ankle, bend_direction):
+	var to_ankle = ankle - hip
+	var distance = to_ankle.length()
+
+	var max_reach = THIGH_LENGTH + SHIN_LENGTH
+	var min_reach = absf(THIGH_LENGTH - SHIN_LENGTH)
+	var solved_distance = clampf(
+		distance,
+		min_reach + 0.001,
+		max_reach - 0.001
+	)
+
+	var direction = to_ankle / maxf(distance, 0.001)
+	var perpendicular = Vector2(-direction.y, direction.x)
+
+	var cos_knee = clampf(
+		(
+			THIGH_LENGTH * THIGH_LENGTH +
+			solved_distance * solved_distance -
+			SHIN_LENGTH * SHIN_LENGTH
+		) / (2.0 * THIGH_LENGTH * solved_distance),
+		-1.0,
+		1.0
+	)
+
+	var along = THIGH_LENGTH * cos(acos(cos_knee))
+	var bend = sqrt(
+		maxf(
+			THIGH_LENGTH * THIGH_LENGTH - along * along,
+			0.0
+		)
+	)
+
+	var candidate_a = hip + direction * along + perpendicular * bend
+	var candidate_b = hip + direction * along - perpendicular * bend
+
+	if candidate_a.x * bend_direction > candidate_b.x * bend_direction:
+		return candidate_a
+
+	return candidate_b
 
 
 func midpoint(a, b):
