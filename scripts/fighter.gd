@@ -44,7 +44,7 @@ const MINT_GREEN = Color("#67e6bc")
 # calculated from the shoulder, not from the torso center, so the arm keeps
 # the correct length while it swings.
 const ARM_LENGTH = BODY_HEIGHT * 0.58
-const ARM_THICKNESS = BODY_WIDTH * 0.25
+const ARM_THICKNESS = BODY_WIDTH * 0.19
 const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
 
@@ -62,7 +62,7 @@ const ARM_GRAVITY = 680.0
 # than looking like a squat/crouched stick figure.
 const THIGH_LENGTH = BODY_HEIGHT * 0.35
 const SHIN_LENGTH = BODY_HEIGHT * 0.32
-const LEG_THICKNESS = BODY_WIDTH * 0.25
+const LEG_THICKNESS = BODY_WIDTH * 0.19
 
 const ANKLE_BASE_X = BODY_WIDTH * 0.34
 const ANKLE_BASE_Y = BODY_HEIGHT * 0.53
@@ -700,7 +700,7 @@ func _draw():
 	draw_pill(
 		pose_point(Vector2(0.0, SHOULDER_Y - 3.0)),
 		pose_point(Vector2(0.0, HIP_Y)),
-		BODY_WIDTH * 0.36,
+		BODY_WIDTH * 0.46,
 		color
 	)
 
