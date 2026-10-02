@@ -287,6 +287,11 @@ func update_movement(delta):
 	)
 
 
+func update_environment_state():
+	grounded = detect_grounded()
+	wall_side = detect_wall_side()
+
+
 func detect_grounded():
 	var origin = global_position + Vector2(
 		0.0,
