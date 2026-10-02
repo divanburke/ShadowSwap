@@ -32,7 +32,7 @@ const GRAVITY = 1700.0
 const MAX_FALL_SPEED = 950.0
 const JUMP_SPEED = 590.0
 
-const ATTACK_DURATION = 0.22
+const ATTACK_DURATION = 0.34
 const ATTACK_COOLDOWN = 0.30
 
 const MINT_GREEN = Color("#67e6bc")
@@ -727,14 +727,39 @@ func constrain_ankle_to_floor(point):
 	return posed
 
 
+func get_uppercut_pose(attack_progress):
+	var progress = smoothstep(0.0, 1.0, attack_progress)
+
+	# The active arm swings from a low chamber into an upward uppercut.
+	# The elbow stays bent at roughly 35 degrees throughout the motion.
+	var upper_arm_angle = lerpf(
+		deg_to_rad(125.0),
+		deg_to_rad(80.0),
+		progress
+	)
+
+	var upper_direction = Vector2(
+		facing * cos(upper_arm_angle),
+		sin(upper_arm_angle)
+	)
+
+	var forearm_direction = (-upper_direction).rotated(
+		deg_to_rad(35.0) * facing
+	)
+
+	var shoulder = Vector2(0.0, SHOULDER_Y)
+	var elbow = shoulder + upper_direction * UPPER_ARM_LENGTH
+	var hand = elbow + forearm_direction * FOREARM_LENGTH
+
+	return [elbow, hand]
+
+
 func get_point(name):
 	var attack_progress = 0.0
 
 	if attack_timer > 0.0:
 		attack_progress = 1.0 - attack_timer / ATTACK_DURATION
 		attack_progress = clampf(attack_progress, 0.0, 1.0)
-
-	var punch = sin(attack_progress * PI)
 
 	match name:
 		"head":
@@ -748,30 +773,30 @@ func get_point(name):
 
 		"hand_left":
 			if attack_timer > 0.0 and facing < 0.0:
-				return pose_point(
-					Vector2(
-						-ATTACK_REACH,
-						SHOULDER_Y + BODY_HEIGHT * 0.03
-					)
-				)
+				var left_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(left_attack_pose[1])
 
 			return pose_point(left_hand_offset)
 
 		"hand_right":
 			if attack_timer > 0.0 and facing > 0.0:
-				return pose_point(
-					Vector2(
-						ATTACK_REACH,
-						SHOULDER_Y + BODY_HEIGHT * 0.03
-					)
-				)
+				var right_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(right_attack_pose[1])
 
 			return pose_point(right_hand_offset)
 
 		"elbow_left":
+			if attack_timer > 0.0 and facing < 0.0:
+				var left_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(left_attack_pose[0])
+
 			return pose_point(left_elbow_offset)
 
 		"elbow_right":
+			if attack_timer > 0.0 and facing > 0.0:
+				var right_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(right_attack_pose[0])
+
 			return pose_point(right_elbow_offset)
 
 		"left_hip":
