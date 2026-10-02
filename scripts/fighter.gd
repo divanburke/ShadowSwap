@@ -20,7 +20,7 @@ const BODY_HEIGHT = 78.0
 const HEAD_RADIUS = 11.0
 const HEAD_Y = -48.0
 const SHOULDER_Y = -25.0
-const HIP_Y = 0.0
+const HIP_Y = -8.0
 
 const MOVE_SPEED = 320.0
 const GROUND_ACCELERATION = 2200.0
@@ -60,12 +60,12 @@ const ARM_GRAVITY = 620.0
 #
 # The longer legs and short torso make the character stand upright rather
 # than looking like a squat/crouched stick figure.
-const THIGH_LENGTH = BODY_HEIGHT * 0.36
+const THIGH_LENGTH = BODY_HEIGHT * 0.35
 const SHIN_LENGTH = BODY_HEIGHT * 0.32
 const LEG_THICKNESS = BODY_WIDTH * 0.25
 
 const ANKLE_BASE_X = BODY_WIDTH * 0.34
-const ANKLE_BASE_Y = BODY_HEIGHT * 0.63
+const ANKLE_BASE_Y = BODY_HEIGHT * 0.53
 const WALK_STRIDE = BODY_HEIGHT * 0.15
 const WALK_LIFT = BODY_HEIGHT * 0.075
 const FOOT_LENGTH = BODY_HEIGHT * 0.11
