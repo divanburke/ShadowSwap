@@ -271,7 +271,12 @@ func build_ragdoll(start_position):
 	)
 
 	# Add joints after all bodies exist so their paths are valid.
-	make_pin_joint(torso, head, torso_position + HEAD_OFFSET + Vector2(0.0, 15.0), 0.0)
+	make_pin_joint(
+		torso,
+		head,
+		torso_position + Vector2(0.0, -TORSO_HEIGHT * 0.5),
+		0.0
+	)
 
 	make_pin_joint(torso, right_upper, shoulder, 0.0)
 	make_pin_joint(torso, left_upper, shoulder, 0.0)
@@ -437,10 +442,15 @@ func create_segment(
 func make_pin_joint(body_a, body_b, world_position, joint_softness):
 	var joint = PinJoint2D.new()
 	joint.global_position = world_position
-	joint.node_a = body_a.get_path()
-	joint.node_b = body_b.get_path()
-	joint.softness = joint_softness
 	add_child(joint)
+
+	# All physics pieces are siblings under this controller. Resolve paths
+	# from the joint itself so the constraint always points at the intended
+	# bodies.
+	joint.node_a = joint.get_path_to(body_a)
+	joint.node_b = joint.get_path_to(body_b)
+	joint.softness = joint_softness
+	joint.disable_collision = true
 
 
 func _physics_process(delta):
@@ -834,7 +844,7 @@ func _draw():
 
 	var color = MINT_GREEN
 
-	draw_segment(
+	draw_vertical_segment(
 		parts["Torso"],
 		TORSO_HEIGHT,
 		TORSO_WIDTH * 0.46,
@@ -921,6 +931,19 @@ func _draw():
 			LIMB_WIDTH * 0.58,
 			color
 		)
+
+
+func draw_vertical_segment(body, length, width, color):
+	var direction = Vector2.UP.rotated(body.rotation)
+	var a = to_local(body.global_position - direction * length * 0.5)
+	var b = to_local(body.global_position + direction * length * 0.5)
+
+	draw_pill(
+		a,
+		b,
+		width,
+		color
+	)
 
 
 func draw_segment(body, length, width, color):
