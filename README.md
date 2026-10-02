@@ -1,70 +1,45 @@
 # ShadowSwap
 
-ShadowSwap is a physics-based 2D stick-fighter arena prototype built around fast movement, jumping, close-range attacks, momentum and ring-outs.
+ShadowSwap is currently a very small one-player stick-fighter prototype.
 
-The current build is deliberately focused on the core arena-fighter loop. The older detachable-body and Shadow Mode systems are not part of the active match.
+This build intentionally contains only the movement foundation:
 
-The gameplay direction follows the broad characteristics published for Stick Fight: physics-based combat, stick figures, short arena matches, interactive platforms and procedural-looking character motion. The implementation uses original code and simple procedural graphics.
+- one player
+- solid mint-green stickman
+- connected head, torso, arms and legs
+- rounded pill-shaped limbs
+- slight walking animation
+- forward/backward movement
+- jumping
+- directional arm hit
 
-## Current match
-
-- 2 local fighters
-- fast horizontal movement
-- jumping with variable height
-- air control
-- physical knockback
-- melee attacks
-- multiple platform layouts
-- ring-out wins
-- first to 5 rounds wins the match
-- no weapon system in the current build
-- AI temporarily disabled
+The direction of the last movement is stored, so pressing J makes the arm attack in that direction.
 
 ## Controls
 
-### Player 1
+- A / D or Left / Right — move
+- W or Up Arrow — jump
+- J — arm hit
 
-- **A / D** — move
-- **W** or **Up Arrow** — jump
-- **J** — punch
-- **K** — kick
+## Current design
 
-### Player 2
+The fighter is a single CharacterBody2D with one capsule collision shape. The visible body is drawn as connected solid pill-shaped segments, so the player cannot collapse or separate while moving.
 
-- **Left / Right** — move
-- **Up Arrow** — jump
-- **Comma (,)** — punch
-- **Period (.)** — kick
+There is currently no:
 
-- **R** — next round
-- At match end, **R** starts a new match
+- AI
+- second player
+- weapons
+- detachable limbs
+- damage system
+- rounds
+- scoring
+- Shadow Mode
 
-## Fighter physics
-
-Each fighter is a CharacterBody2D with:
-
-- acceleration and deceleration
-- gravity and momentum
-- grounded and airborne movement
-- coyote-time jump forgiveness
-- variable jump height
-- temporary hit stun
-- strong knockback from attacks
-- collision with the arena and other fighters
-
-The character is rendered as a simple solid-color stick figure. Arms and legs use thick rounded pill-shaped strokes.
-
-## Arena
-
-The arena is made from simple solid platforms and rotates through several compact layouts between rounds.
-
-A fighter who falls out of the arena loses the round.
+Those systems can be added later once the basic player movement and character feel are correct.
 
 ## Project structure
 
-- `main.tscn` — main scene
-- `scripts/main.gd` — arena, match and scoring
-- `scripts/fighter.gd` — fighter movement, animation and melee
-- `scripts/arena_platform.gd` — platform collision and visuals
-
-The project currently uses procedural graphics and no external art assets.
+- main.tscn — main scene
+- scripts/main.gd — creates the floor and one player
+- scripts/fighter.gd — player movement, jump, animation and arm hit
