@@ -58,18 +58,18 @@ const WALL_CHECK_DISTANCE = 27.0
 
 # Torque drives are intentionally softer in the air. This lets the body
 # flop, rotate and recover instead of behaving like a rigid animated sprite.
-const TORSO_GROUND_STRENGTH = 420.0
-const TORSO_GROUND_DAMPING = 42.0
-const TORSO_AIR_STRENGTH = 90.0
-const TORSO_AIR_DAMPING = 8.0
+const TORSO_GROUND_STRENGTH = 1100.0
+const TORSO_GROUND_DAMPING = 78.0
+const TORSO_AIR_STRENGTH = 240.0
+const TORSO_AIR_DAMPING = 18.0
 
-const LIMB_GROUND_STRENGTH = 34.0
-const LIMB_GROUND_DAMPING = 3.8
-const LIMB_AIR_STRENGTH = 18.0
-const LIMB_AIR_DAMPING = 2.0
+const LIMB_GROUND_STRENGTH = 86.0
+const LIMB_GROUND_DAMPING = 8.0
+const LIMB_AIR_STRENGTH = 44.0
+const LIMB_AIR_DAMPING = 4.5
 
-const HEAD_STRENGTH = 20.0
-const HEAD_DAMPING = 2.5
+const HEAD_STRENGTH = 45.0
+const HEAD_DAMPING = 6.0
 
 const WALK_SWING = deg_to_rad(24.0)
 const WALK_CYCLE_SPEED = 7.0
