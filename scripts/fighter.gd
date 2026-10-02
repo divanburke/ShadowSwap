@@ -66,16 +66,19 @@ const LEG_THICKNESS = BODY_WIDTH * 0.19
 
 const ANKLE_BASE_X = BODY_WIDTH * 0.34
 const ANKLE_BASE_Y = BODY_HEIGHT * 0.53
-const WALK_STRIDE = BODY_HEIGHT * 0.15
-const WALK_LIFT = BODY_HEIGHT * 0.075
+const WALK_STRIDE = BODY_HEIGHT * 0.18
+const WALK_LIFT = BODY_HEIGHT * 0.11
+const WALK_CYCLE_SPEED = 4.0
+
+const PLANTED_FOOT_SPRING = 72.0
+const PLANTED_FOOT_DAMPING = 11.0
+const SWING_FOOT_SPRING = 48.0
+const SWING_FOOT_DAMPING = 7.5
 
 # The visible ankle has a small clearance above the collision floor so the
 # floppy pose cannot visually sink through the platform.
 const GROUND_RENDER_Y = BODY_HEIGHT * 0.49
 const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
-
-const FOOT_SPRING = 48.0
-const FOOT_DAMPING = 8.0
 
 # Whole-body pose physics. The collision stays upright, but the visible
 # stick figure can lean, sway and settle like a loose body.
@@ -362,51 +365,61 @@ func update_limb_physics(delta):
 	right_hand_velocity = right_arm_state[1]
 
 	# ==============================================================
-	# LEGS - upright two-step human gait
+	# LEGS - human walk cycle
 	# ==============================================================
+	# Each foot has two phases:
+	#   0.0 -> 0.5 : planted/supporting the body
+	#   0.5 -> 1.0 : lifted and swinging forward
+	#
+	# During support the foot moves backward relative to the hips as the
+	# body passes over it. During swing it lifts, travels forward, and lands.
 	if is_on_floor() and speed_ratio > 0.05:
-		walking_phase += delta * (4.5 + speed_ratio * 9.0)
+		walking_phase = fmod(
+			walking_phase + delta * (WALK_CYCLE_SPEED + speed_ratio * 5.0),
+			TAU
+		)
 	else:
 		walking_phase = move_toward(
 			walking_phase,
 			0.0,
-			delta * 2.8
+			delta * 3.2
 		)
 
-	var left_step = sin(walking_phase)
-	var right_step = sin(walking_phase + PI)
+	var left_cycle = fposmod(walking_phase / TAU, 1.0)
+	var right_cycle = fposmod(left_cycle + 0.5, 1.0)
 
-	# One foot lifts while the other stays close to the floor.
-	var left_lift = maxf(left_step, 0.0) * WALK_LIFT
-	var right_lift = maxf(right_step, 0.0) * WALK_LIFT
-
-	var left_ankle_target = Vector2(
-		-ANKLE_BASE_X + left_step * WALK_STRIDE,
-		ANKLE_BASE_Y - left_lift
+	var left_leg_target = get_walk_ankle_target(
+		left_cycle,
+		-1.0,
+		is_on_floor()
 	)
 
-	var right_ankle_target = Vector2(
-		ANKLE_BASE_X + right_step * WALK_STRIDE,
-		ANKLE_BASE_Y - right_lift
+	var right_leg_target = get_walk_ankle_target(
+		right_cycle,
+		1.0,
+		is_on_floor()
 	)
 
 	if speed_ratio <= 0.05 and is_on_floor():
-		left_ankle_target = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
-		right_ankle_target = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
+		left_leg_target = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
+		right_leg_target = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
 
-	# Airborne legs hang/tuck instead of continuing the walking cycle.
+	# In the air both legs relax downward and slightly behind the body.
 	if not is_on_floor():
-		left_ankle_target.y += BODY_HEIGHT * 0.05
-		right_ankle_target.y += BODY_HEIGHT * 0.05
-		left_ankle_target.x -= facing * BODY_HEIGHT * 0.045
-		right_ankle_target.x -= facing * BODY_HEIGHT * 0.045
+		left_leg_target.y += BODY_HEIGHT * 0.06
+		right_leg_target.y += BODY_HEIGHT * 0.06
+		left_leg_target.x -= facing * BODY_HEIGHT * 0.04
+		right_leg_target.x -= facing * BODY_HEIGHT * 0.04
+
+	var left_cycle_stance = is_on_floor() and left_cycle < 0.5
+	var right_cycle_stance = is_on_floor() and right_cycle < 0.5
 
 	var left_ankle_state = spring_vector(
 		left_ankle_offset,
 		left_ankle_velocity,
-		left_ankle_target,
-		FOOT_SPRING,
-		FOOT_DAMPING,
+		left_leg_target,
+		PLANTED_FOOT_SPRING if left_cycle_stance else SWING_FOOT_SPRING,
+		PLANTED_FOOT_DAMPING if left_cycle_stance else SWING_FOOT_DAMPING,
 		delta
 	)
 
@@ -416,14 +429,28 @@ func update_limb_physics(delta):
 	var right_ankle_state = spring_vector(
 		right_ankle_offset,
 		right_ankle_velocity,
-		right_ankle_target,
-		FOOT_SPRING,
-		FOOT_DAMPING,
+		right_leg_target,
+		PLANTED_FOOT_SPRING if right_cycle_stance else SWING_FOOT_SPRING,
+		PLANTED_FOOT_DAMPING if right_cycle_stance else SWING_FOOT_DAMPING,
 		delta
 	)
 
 	right_ankle_offset = right_ankle_state[0]
 	right_ankle_velocity = right_ankle_state[1]
+
+	# The knee solver naturally produces a deeper bend on the lifted swing
+	# leg because its ankle is higher and farther forward.
+	left_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		left_ankle_offset,
+		facing
+	)
+
+	right_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		right_ankle_offset,
+		facing
+	)
 
 	left_knee_offset = solve_leg(
 		Vector2(0.0, HIP_Y),
@@ -438,6 +465,48 @@ func update_limb_physics(delta):
 	)
 
 	previous_floor_state = is_on_floor()
+
+
+func get_walk_ankle_target(cycle, side, grounded):
+	var forward = facing
+
+	# Side separation keeps both legs connected to the central hip while
+	# leaving enough room for a readable human silhouette.
+	var side_offset = side * ANKLE_BASE_X
+
+	if not grounded:
+		return Vector2(
+			side_offset - forward * BODY_HEIGHT * 0.04,
+			ANKLE_BASE_Y + BODY_HEIGHT * 0.06
+		)
+
+	# Support: the foot is planted and the body moves over it.
+	if cycle < 0.5:
+		var support_t = cycle * 2.0
+		support_t = smoothstep(0.0, 1.0, support_t)
+
+		return Vector2(
+			side_offset + lerpf(
+				forward * WALK_STRIDE,
+				-forward * WALK_STRIDE,
+				support_t
+			),
+			ANKLE_BASE_Y
+		)
+
+	# Swing: lift the foot, bring it forward, then lower it for contact.
+	var swing_t = (cycle - 0.5) * 2.0
+	var swing_progress = smoothstep(0.0, 1.0, swing_t)
+	var lift = sin(swing_t * PI) * WALK_LIFT
+
+	return Vector2(
+		side_offset + lerpf(
+			-forward * WALK_STRIDE,
+			forward * WALK_STRIDE,
+			swing_progress
+		),
+		ANKLE_BASE_Y - lift
+	)
 
 
 func solve_leg(hip, ankle, bend_direction):
