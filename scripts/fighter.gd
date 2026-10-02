@@ -34,14 +34,14 @@ const LEG_THICKNESS := 4.5
 const THIGH_LENGTH := BODY_HEIGHT * 0.34
 const SHIN_LENGTH := BODY_HEIGHT * 0.31
 
-const ARM_SPRING := 25.0
-const ARM_DAMPING := 6.0
-const LEG_SPRING := 32.0
-const LEG_DAMPING := 7.0
-const BODY_UPRIGHT_SPRING := 30.0
-const BODY_UPRIGHT_DAMPING := 6.0
-const HEAD_SPRING := 24.0
-const HEAD_DAMPING := 5.0
+const ARM_SPRING := 42.0
+const ARM_DAMPING := 8.0
+const LEG_SPRING := 75.0
+const LEG_DAMPING := 11.0
+const BODY_UPRIGHT_SPRING := 95.0
+const BODY_UPRIGHT_DAMPING := 12.0
+const HEAD_SPRING := 55.0
+const HEAD_DAMPING := 8.0
 
 const WALK_SPEED := 7.0
 const WALK_STRIDE := 17.0
@@ -119,14 +119,14 @@ func build_ragdoll():
 
 	upper_arm_l = make_capsule(
 		"UpperArmL",
-		shoulder + Vector2(-arm_upper_len * 0.30, arm_upper_len * 0.35),
+		shoulder + Vector2(-arm_upper_len * 0.18, arm_upper_len * 0.52),
 		ARM_THICKNESS * 0.5,
 		arm_upper_len,
 		0.65
 	)
 	lower_arm_l = make_capsule(
 		"LowerArmL",
-		shoulder + Vector2(-arm_upper_len * 0.72, arm_upper_len * 0.88),
+		shoulder + Vector2(-arm_upper_len * 0.52, arm_upper_len + arm_lower_len * 0.50),
 		ARM_THICKNESS * 0.5,
 		arm_lower_len,
 		0.55
@@ -134,14 +134,14 @@ func build_ragdoll():
 
 	upper_arm_r = make_capsule(
 		"UpperArmR",
-		shoulder + Vector2(arm_upper_len * 0.30, arm_upper_len * 0.35),
+		shoulder + Vector2(arm_upper_len * 0.18, arm_upper_len * 0.52),
 		ARM_THICKNESS * 0.5,
 		arm_upper_len,
 		0.65
 	)
 	lower_arm_r = make_capsule(
 		"LowerArmR",
-		shoulder + Vector2(arm_upper_len * 0.72, arm_upper_len * 0.88),
+		shoulder + Vector2(arm_upper_len * 0.52, arm_upper_len + arm_lower_len * 0.50),
 		ARM_THICKNESS * 0.5,
 		arm_lower_len,
 		0.55
@@ -149,14 +149,14 @@ func build_ragdoll():
 
 	upper_leg_l = make_capsule(
 		"UpperLegL",
-		hip + Vector2(-3.0, THIGH_LENGTH * 0.5),
+		hip + Vector2(-7.0, THIGH_LENGTH * 0.5),
 		LEG_THICKNESS * 0.5,
 		THIGH_LENGTH,
 		1.1
 	)
 	lower_leg_l = make_capsule(
 		"LowerLegL",
-		hip + Vector2(-4.0, THIGH_LENGTH + SHIN_LENGTH * 0.5),
+		hip + Vector2(-7.0, THIGH_LENGTH + SHIN_LENGTH * 0.5),
 		LEG_THICKNESS * 0.5,
 		SHIN_LENGTH,
 		0.95
@@ -164,29 +164,29 @@ func build_ragdoll():
 
 	upper_leg_r = make_capsule(
 		"UpperLegR",
-		hip + Vector2(3.0, THIGH_LENGTH * 0.5),
+		hip + Vector2(7.0, THIGH_LENGTH * 0.5),
 		LEG_THICKNESS * 0.5,
 		THIGH_LENGTH,
 		1.1
 	)
 	lower_leg_r = make_capsule(
 		"LowerLegR",
-		hip + Vector2(4.0, THIGH_LENGTH + SHIN_LENGTH * 0.5),
+		hip + Vector2(7.0, THIGH_LENGTH + SHIN_LENGTH * 0.5),
 		LEG_THICKNESS * 0.5,
 		SHIN_LENGTH,
 		0.95
 	)
 
 	# Start the limbs with the same loose pose used by the target springs.
-	upper_arm_l.rotation = -0.48
-	lower_arm_l.rotation = -0.08
-	upper_arm_r.rotation = 0.48
-	lower_arm_r.rotation = 0.08
+	upper_arm_l.rotation = -0.10
+	lower_arm_l.rotation = -0.04
+	upper_arm_r.rotation = 0.10
+	lower_arm_r.rotation = 0.04
 
-	upper_leg_l.rotation = -0.03
-	lower_leg_l.rotation = 0.03
-	upper_leg_r.rotation = 0.03
-	lower_leg_r.rotation = -0.03
+	upper_leg_l.rotation = -0.04
+	lower_leg_l.rotation = 0.02
+	upper_leg_r.rotation = 0.04
+	lower_leg_r.rotation = -0.02
 
 	ragdoll_parts = [
 		torso,
