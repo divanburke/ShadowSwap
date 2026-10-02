@@ -48,8 +48,8 @@ const ARM_THICKNESS = BODY_WIDTH * 0.19
 const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
 
-const ARM_SPRING = 20.0
-const ARM_DAMPING = 4.6
+const ARM_SPRING = 17.0
+const ARM_DAMPING = 4.0
 const ARM_GRAVITY = 680.0
 
 # -------------------------------------------------------------------------
