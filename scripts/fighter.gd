@@ -93,10 +93,14 @@ const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
 
 # Whole-body pose physics. The collision stays upright, but the visible
 # stick figure can lean, sway and settle like a loose body.
-const BODY_ANGULAR_SPRING = 7.5
-const BODY_ANGULAR_DAMPING = 2.2
+const BODY_ANGULAR_SPRING = 12.0
+const BODY_ANGULAR_DAMPING = 4.5
 const BODY_MAX_ANGLE = deg_to_rad(30.0)
 const BODY_AIR_MAX_ANGLE = deg_to_rad(100.0)
+
+const GROUND_MAX_ANGULAR_SPEED = 2.8
+const AIR_MAX_ANGULAR_SPEED = 7.0
+const TORSO_INERTIA = 18.0
 const BODY_ACCEL_LEAN = 0.00055
 const BODY_SPEED_LEAN = 0.0010
 
@@ -145,7 +149,8 @@ func setup(start_position):
 	mass = 3.0
 	gravity_scale = 1.30
 	linear_damp = 0.08
-	angular_damp = 1.8
+	angular_damp = 4.0
+	inertia = TORSO_INERTIA
 	continuous_cd = RigidBody2D.CCD_MODE_CAST_RAY
 	can_sleep = false
 	lock_rotation = false
@@ -197,6 +202,16 @@ func _physics_process(delta):
 	# Refresh physical contact state before applying movement and pose forces.
 	update_environment_state()
 	read_input()
+
+	# Prevent tiny ground bumps from turning into an uncontrolled flip while
+	# still allowing substantially more rotation in the air.
+	var angular_limit = GROUND_MAX_ANGULAR_SPEED if grounded else AIR_MAX_ANGULAR_SPEED
+	angular_velocity = clampf(
+		angular_velocity,
+		-angular_limit,
+		angular_limit
+	)
+
 	update_movement(delta)
 	update_limb_physics(delta)
 	previous_floor_state = grounded
