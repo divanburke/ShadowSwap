@@ -744,8 +744,10 @@ func get_uppercut_pose(attack_progress):
 		sin(upper_arm_angle)
 	)
 
+	# Bend the forearm to the opposite side of the upper arm,
+	# while keeping the same fixed 35 degree joint angle.
 	var forearm_direction = upper_direction.rotated(
-		UPPERCUT_ELBOW_ANGLE * facing
+		-UPPERCUT_ELBOW_ANGLE * facing
 	)
 
 	var shoulder = Vector2(0.0, SHOULDER_Y)
