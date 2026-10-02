@@ -243,17 +243,6 @@ func report_hit(attacker_name, _part_name, attack_kind):
 	center_message.modulate.a = 1.0
 
 
-func part_lost(_fighter, _part_name):
-	# Kept for compatibility with older project code. The new Stick Fight
-	# style no longer uses detachable body-part health.
-	pass
-
-
-func shadow_mode_started(_fighter):
-	# Kept for compatibility with the previous prototype. Shadow abilities
-	# are disabled in this gameplay reset.
-	pass
-
 
 func fighter_defeated(loser):
 	if round_locked:
