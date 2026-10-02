@@ -398,7 +398,7 @@ func is_grounded() -> bool:
 		if part == null:
 			continue
 
-		var bottom := part.global_position.y + part.get_collision_layer_value(2)
+		var bottom: float = part.global_position.y
 		if part.global_position.y > FLOOR_Y - BODY_HEIGHT * 0.55:
 			return true
 
