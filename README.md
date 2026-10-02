@@ -1,82 +1,70 @@
 # ShadowSwap
 
-ShadowSwap is a minimal 2D physics fighting game prototype inspired by simple stick-fighter arena games.
+ShadowSwap is a physics-based 2D stick-fighter arena prototype built around fast movement, jumping, close-range attacks, momentum and ring-outs.
 
-The player and AI use stable CharacterBody2D movement for reliable running and jumping. The visible stick-man body is procedurally animated, while knocked-off body parts become independent rigid bodies.
+The current build is deliberately focused on the core arena-fighter loop. The older detachable-body and Shadow Mode systems are not part of the active match.
+
+The gameplay direction follows the broad characteristics published for Stick Fight: physics-based combat, stick figures, short arena matches, interactive platforms and procedural-looking character motion. The implementation uses original code and simple procedural graphics. citeturn281384search0
+
+## Current match
+
+- 2 local fighters
+- fast horizontal movement
+- jumping with variable height
+- air control
+- physical knockback
+- melee attacks
+- multiple platform layouts
+- ring-out wins
+- first to 5 rounds wins the match
+- no weapon system in the current build
+- AI temporarily disabled
 
 ## Controls
 
-- **A / D** or **Left / Right** — move
-- **Up Arrow** or **W** — jump
+### Player 1
+
+- **A / D** — move
+- **W** or **Up Arrow** — jump
 - **J** — punch
 - **K** — kick
-- **E** — Shadow Mode
-- **R** — reset the fight
 
-## Character physics
+### Player 2
 
-The connected fighter uses a physics-aware character controller instead of trying to balance several rigid bodies at once.
+- **Left / Right** — move
+- **Up Arrow** — jump
+- **Comma (,)** — punch
+- **Period (.)** — kick
 
-- acceleration and deceleration create momentum
-- gravity produces natural falling
-- jump buffering and coyote time make jumping responsive
-- releasing jump early produces a shorter jump
-- air control is weaker than ground control
-- incoming attacks add knockback and short stagger
-- the character can collide with arena platforms and the other fighter
-- the stick-man arms and legs animate with the character's movement
+- **R** — next round
+- At match end, **R** starts a new match
 
-The controller is deliberately stable while the detached pieces use full rigid-body physics.
+## Fighter physics
 
-## Shadow Mode
+Each fighter is a CharacterBody2D with:
 
-Shadow Mode lasts for a few seconds and gives the fighter:
+- acceleration and deceleration
+- gravity and momentum
+- grounded and airborne movement
+- coyote-time jump forgiveness
+- variable jump height
+- temporary hit stun
+- strong knockback from attacks
+- collision with the arena and other fighters
 
-- temporary invulnerability
-- stronger melee knockback
-- stronger melee damage
-- a visible purple state
-
-Shadow Mode has a cooldown, so timing it matters.
-
-## Body-part damage
-
-The stickmen have:
-
-- head
-- torso
-- left arm
-- right arm
-- left leg
-- right leg
-
-Each part has its own durability. When a part is lost, a separate rigid-body piece is spawned at its current location and inherits the fighter's momentum.
-
-Losing one leg reduces movement and jump strength. Losing both arms removes punching. Losing the head or torso, or enough parts being detached, ends the round.
-
-## AI
-
-The AI:
-
-- runs toward the player
-- changes direction
-- jumps
-- punches and kicks
-- sometimes backs away
-- reacts to Shadow Mode
-- uses Shadow Mode when available
-- behaves with small random variations so fights do not play identically
+The character is rendered as a simple solid-color stick figure. Arms and legs use thick rounded pill-shaped strokes.
 
 ## Arena
 
-The arena uses a simple dark-grey style with slightly rounded platform corners. Platforms are placed at multiple heights so jumping and movement matter.
+The arena is made from simple solid platforms and rotates through several compact layouts between rounds.
+
+A fighter who falls out of the arena loses the round.
 
 ## Project structure
 
 - `main.tscn` — main scene
-- `scripts/main.gd` — arena, UI, rounds
-- `scripts/fighter.gd` — player/AI controller, movement, attacks, damage, Shadow Mode
-- `scripts/limb.gd` — detached body-part visuals and physics
-- `scripts/arena_platform.gd` — rounded physics platforms
+- `scripts/main.gd` — arena, match and scoring
+- `scripts/fighter.gd` — fighter movement, animation and melee
+- `scripts/arena_platform.gd` — platform collision and visuals
 
-The project uses Godot 4.7-compatible 2D physics and intentionally starts without external art or audio assets.
+The project currently uses procedural graphics and no external art assets.
