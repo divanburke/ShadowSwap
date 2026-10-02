@@ -22,15 +22,21 @@ const HEAD_Y = -48.0
 const SHOULDER_Y = -25.0
 const HIP_Y = -8.0
 
-const MOVE_SPEED = 320.0
-const GROUND_ACCELERATION = 2200.0
-const GROUND_DECELERATION = 2600.0
-const AIR_ACCELERATION = 900.0
-const AIR_DECELERATION = 420.0
+const MOVE_SPEED = 380.0
+const GROUND_ACCELERATION = 3000.0
+const GROUND_DECELERATION = 1450.0
+const AIR_ACCELERATION = 1550.0
+const AIR_DECELERATION = 95.0
 
-const GRAVITY = 1700.0
-const MAX_FALL_SPEED = 950.0
-const JUMP_SPEED = 590.0
+const GRAVITY = 1500.0
+const FAST_FALL_ACCELERATION = 1200.0
+const MAX_FALL_SPEED = 980.0
+const JUMP_SPEED = 635.0
+
+const WALL_JUMP_HORIZONTAL_SPEED = 500.0
+const WALL_JUMP_VERTICAL_SPEED = 620.0
+const WALL_CHECK_DISTANCE = 22.0
+const WALL_JUMP_COOLDOWN = 0.12
 
 const ATTACK_DURATION = 0.30
 const ATTACK_COOLDOWN = 0.30
@@ -51,8 +57,8 @@ const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
 const UPPERCUT_ELBOW_ANGLE = deg_to_rad(35.0)
 
-const ARM_SPRING = 16.0
-const ARM_DAMPING = 3.7
+const ARM_SPRING = 14.0
+const ARM_DAMPING = 3.3
 const ARM_GRAVITY = 680.0
 
 # -------------------------------------------------------------------------
@@ -85,11 +91,11 @@ const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
 
 # Whole-body pose physics. The collision stays upright, but the visible
 # stick figure can lean, sway and settle like a loose body.
-const BODY_ANGULAR_SPRING = 18.0
-const BODY_ANGULAR_DAMPING = 3.2
-const BODY_MAX_ANGLE = deg_to_rad(16.0)
+const BODY_ANGULAR_SPRING = 24.0
+const BODY_ANGULAR_DAMPING = 3.9
+const BODY_MAX_ANGLE = deg_to_rad(21.0)
 const BODY_ACCEL_LEAN = 0.00055
-const BODY_SPEED_LEAN = 0.00085
+const BODY_SPEED_LEAN = 0.0010
 
 const BODY_BOB_SPRING = 20.0
 const BODY_BOB_DAMPING = 3.8
@@ -123,6 +129,8 @@ var previous_floor_state = false
 var attack_timer = 0.0
 var attack_cooldown = 0.0
 var jump_was_down = false
+var wall_jump_cooldown = 0.0
+var fast_fall = false
 
 
 func setup(start_position):
@@ -259,17 +267,67 @@ func update_movement(delta):
 	if not on_floor:
 		velocity.y += GRAVITY * delta
 
+		if fast_fall:
+			velocity.y += FAST_FALL_ACCELERATION * delta
+
 	velocity.y = minf(velocity.y, MAX_FALL_SPEED)
 
 	move_and_slide()
+
+	wall_jump_cooldown = maxf(
+		wall_jump_cooldown - delta,
+		0.0
+	)
 
 	if is_on_floor() and absf(velocity.x) < 2.0:
 		velocity.x = 0.0
 
 
+func detect_wall_side():
+	var origin = global_position + Vector2(0.0, -2.0)
+
+	var left_query = PhysicsRayQueryParameters2D.create(
+		origin,
+		origin + Vector2(-WALL_CHECK_DISTANCE, 0.0)
+	)
+	left_query.collision_mask = 1
+	left_query.exclude = [get_rid()]
+
+	var left_hit = get_world_2d().direct_space_state.intersect_ray(left_query)
+
+	if not left_hit.is_empty():
+		return -1.0
+
+	var right_query = PhysicsRayQueryParameters2D.create(
+		origin,
+		origin + Vector2(WALL_CHECK_DISTANCE, 0.0)
+	)
+	right_query.collision_mask = 1
+	right_query.exclude = [get_rid()]
+
+	var right_hit = get_world_2d().direct_space_state.intersect_ray(right_query)
+
+	if not right_hit.is_empty():
+		return 1.0
+
+	return 0.0
+
+
 func try_jump():
 	if is_on_floor():
 		velocity.y = -JUMP_SPEED
+		return
+
+	if wall_jump_cooldown > 0.0:
+		return
+
+	var wall_side = detect_wall_side()
+
+	if wall_side != 0.0:
+		velocity.x = -wall_side * WALL_JUMP_HORIZONTAL_SPEED
+		velocity.y = -WALL_JUMP_VERTICAL_SPEED
+		facing = -wall_side
+		wall_jump_cooldown = WALL_JUMP_COOLDOWN
 
 
 func start_attack():
