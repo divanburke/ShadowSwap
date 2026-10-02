@@ -32,8 +32,8 @@ const GRAVITY = 1700.0
 const MAX_FALL_SPEED = 950.0
 const JUMP_SPEED = 590.0
 
-const ATTACK_DURATION = 0.18
-const ATTACK_COOLDOWN = 0.26
+const ATTACK_DURATION = 0.22
+const ATTACK_COOLDOWN = 0.30
 
 const MINT_GREEN = Color("#67e6bc")
 
