@@ -305,13 +305,15 @@ func update_limb_physics(delta):
 		7.0
 	)
 
+	var arm_swing = sin(walking_phase) * WALK_STRIDE * 0.55 * speed_ratio
+
 	var left_target = shoulder + Vector2(
-		ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia,
+		ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia + arm_swing,
 		ARM_REST_VECTOR.y * ARM_LENGTH + vertical_inertia
 	)
 
 	var right_target = shoulder + Vector2(
-		-ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia,
+		-ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia - arm_swing,
 		ARM_REST_VECTOR.y * ARM_LENGTH + vertical_inertia
 	)
 
