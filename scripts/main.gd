@@ -39,7 +39,6 @@ func build_player():
 
 
 func _draw():
-	# Very simple arena while the player controller is being built.
 	draw_rect(
 		Rect2(Vector2.ZERO, VIEW_SIZE),
 		Color("#10151b")
@@ -57,7 +56,6 @@ func _draw():
 		3.0
 	)
 
-	# Small instruction line.
 	draw_string(
 		ThemeDB.fallback_font,
 		Vector2(430.0, 42.0),
