@@ -4,7 +4,7 @@ ShadowSwap is a physics-based 2D stick-fighter arena prototype built around fast
 
 The current build is deliberately focused on the core arena-fighter loop. The older detachable-body and Shadow Mode systems are not part of the active match.
 
-The gameplay direction follows the broad characteristics published for Stick Fight: physics-based combat, stick figures, short arena matches, interactive platforms and procedural-looking character motion. The implementation uses original code and simple procedural graphics. citeturn281384search0
+The gameplay direction follows the broad characteristics published for Stick Fight: physics-based combat, stick figures, short arena matches, interactive platforms and procedural-looking character motion. The implementation uses original code and simple procedural graphics.
 
 ## Current match
 
