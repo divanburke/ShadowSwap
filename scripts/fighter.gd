@@ -49,6 +49,7 @@ const FOREARM_LENGTH = ARM_LENGTH * 0.48
 const ARM_THICKNESS = BODY_WIDTH * 0.19
 const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
+const UPPERCUT_ELBOW_ANGLE = deg_to_rad(35.0)
 
 const ARM_SPRING = 16.0
 const ARM_DAMPING = 3.7
@@ -730,11 +731,11 @@ func constrain_ankle_to_floor(point):
 func get_uppercut_pose(attack_progress):
 	var progress = smoothstep(0.0, 1.0, attack_progress)
 
-	# The active arm swings from a low chamber into an upward uppercut.
-	# The elbow stays bent at roughly 35 degrees throughout the motion.
+	# The upper arm does the entire swing. The forearm is locked to it
+	# at a fixed 35 degree relative angle, so it never moves independently.
 	var upper_arm_angle = lerpf(
-		deg_to_rad(125.0),
-		deg_to_rad(80.0),
+		deg_to_rad(60.0),
+		deg_to_rad(-60.0),
 		progress
 	)
 
@@ -743,8 +744,8 @@ func get_uppercut_pose(attack_progress):
 		sin(upper_arm_angle)
 	)
 
-	var forearm_direction = (-upper_direction).rotated(
-		deg_to_rad(35.0) * facing
+	var forearm_direction = upper_direction.rotated(
+		UPPERCUT_ELBOW_ANGLE * facing
 	)
 
 	var shoulder = Vector2(0.0, SHOULDER_Y)
