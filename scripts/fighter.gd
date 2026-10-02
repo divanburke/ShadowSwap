@@ -2,23 +2,25 @@ extends CharacterBody2D
 
 # ShadowSwap - simple one-player stick fighter foundation.
 #
-# This version intentionally has only:
-#   - one player
-#   - one solid-color body
-#   - movement
-#   - jumping
-#   - a human-like procedural walk cycle
-#   - physics-driven arm swing
-#   - a directional arm hit
+# The fighter uses a clean, upright stick-figure silhouette:
+#   - small round head
+#   - short narrow torso
+#   - long proportional arms
+#   - long two-bone legs
+#   - simple procedural walking
+#   - physics-driven limb motion
 #
-# No AI, weapons, ragdolls, damage systems, rounds, or extra combat systems.
+# The design is inspired by the broad silhouette of classic stick-fighter
+# games without copying any proprietary character artwork.
 
 const BODY_WIDTH = 28.0
 const BODY_HEIGHT = 78.0
 
-const HEAD_RADIUS = BODY_HEIGHT * 0.18
-const SHOULDER_Y = -BODY_HEIGHT * 0.32
-const HIP_Y = BODY_HEIGHT * 0.205
+# Upright body layout.
+const HEAD_RADIUS = 11.0
+const HEAD_Y = -48.0
+const SHOULDER_Y = -25.0
+const HIP_Y = 0.0
 
 const MOVE_SPEED = 320.0
 const GROUND_ACCELERATION = 2200.0
@@ -36,42 +38,45 @@ const ATTACK_COOLDOWN = 0.26
 const MINT_GREEN = Color("#67e6bc")
 
 # -------------------------------------------------------------------------
-# Human-proportioned arms
+# Arms
 # -------------------------------------------------------------------------
-# Arm length is derived from the body height instead of being a fixed
-# pixel value, so the proportions stay consistent if the fighter is resized.
-const ARM_LENGTH = BODY_HEIGHT * 0.52
-const ARM_THICKNESS = BODY_WIDTH * 0.285
-const ARM_REST_X = ARM_LENGTH * 0.70
-const ARM_REST_Y = ARM_LENGTH * 0.714
+# Arm length is tied directly to the body height. The hand position is
+# calculated from the shoulder, not from the torso center, so the arm keeps
+# the correct length while it swings.
+const ARM_LENGTH = BODY_HEIGHT * 0.58
+const ARM_THICKNESS = BODY_WIDTH * 0.25
+const ARM_REST_VECTOR = Vector2(-0.72, 0.69).normalized()
+const ATTACK_REACH = ARM_LENGTH * 1.15
 
 const ARM_SPRING = 24.0
 const ARM_DAMPING = 5.2
 const ARM_GRAVITY = 620.0
-const ATTACK_REACH = ARM_LENGTH * 1.12
 
 # -------------------------------------------------------------------------
-# Human-like legs
+# Legs
 # -------------------------------------------------------------------------
-# A real leg is treated as two connected bones: thigh + shin. We solve the
-# knee position from a desired ankle position with a two-bone IK calculation.
+# Each leg is a real visual two-bone chain:
+#       hip -> knee -> ankle -> foot
+#
+# The longer legs and short torso make the character stand upright rather
+# than looking like a squat/crouched stick figure.
 const THIGH_LENGTH = BODY_HEIGHT * 0.36
-const SHIN_LENGTH = BODY_HEIGHT * 0.35
-const LEG_THICKNESS = BODY_WIDTH * 0.30
+const SHIN_LENGTH = BODY_HEIGHT * 0.32
+const LEG_THICKNESS = BODY_WIDTH * 0.25
 
-const ANKLE_BASE_X = BODY_WIDTH * 0.36
+const ANKLE_BASE_X = BODY_WIDTH * 0.34
 const ANKLE_BASE_Y = BODY_HEIGHT * 0.63
-const WALK_STRIDE = BODY_HEIGHT * 0.17
-const WALK_LIFT = BODY_HEIGHT * 0.085
-const WALK_FOOT_FORWARD = BODY_HEIGHT * 0.09
+const WALK_STRIDE = BODY_HEIGHT * 0.15
+const WALK_LIFT = BODY_HEIGHT * 0.075
+const FOOT_LENGTH = BODY_HEIGHT * 0.11
 
 const FOOT_SPRING = 58.0
 const FOOT_DAMPING = 9.0
 
 var facing = 1.0
 
-var left_hand_offset = Vector2(-ARM_REST_X, ARM_REST_Y)
-var right_hand_offset = Vector2(ARM_REST_X, ARM_REST_Y)
+var left_hand_offset = Vector2.ZERO
+var right_hand_offset = Vector2.ZERO
 var left_hand_velocity = Vector2.ZERO
 var right_hand_velocity = Vector2.ZERO
 
@@ -105,6 +110,7 @@ func setup(start_position):
 	safe_margin = 0.08
 
 	build_collision()
+	reset_limb_positions()
 	queue_redraw()
 
 
@@ -120,6 +126,27 @@ func build_collision():
 	collision.position = Vector2(0.0, 2.0)
 
 	add_child(collision)
+
+
+func reset_limb_positions():
+	var left_rest = Vector2(
+		ARM_REST_VECTOR.x * ARM_LENGTH,
+		ARM_REST_VECTOR.y * ARM_LENGTH
+	)
+
+	var right_rest = Vector2(
+		-ARM_REST_VECTOR.x * ARM_LENGTH,
+		ARM_REST_VECTOR.y * ARM_LENGTH
+	)
+
+	left_hand_offset = Vector2(0.0, SHOULDER_Y) + left_rest
+	right_hand_offset = Vector2(0.0, SHOULDER_Y) + right_rest
+
+	left_hand_velocity = Vector2.ZERO
+	right_hand_velocity = Vector2.ZERO
+
+	left_knee_offset = Vector2(-3.0, HIP_Y + THIGH_LENGTH)
+	right_knee_offset = Vector2(3.0, HIP_Y + THIGH_LENGTH)
 
 
 func _physics_process(delta):
@@ -146,8 +173,8 @@ func read_input():
 		move_direction += 1.0
 
 	if move_direction != 0.0:
-		# Facing changes only from movement, so an attack always uses the
-		# direction the player last walked.
+		# Facing changes only from movement. Attacks use the last walked
+		# direction, matching a simple directional stick-fighter controller.
 		facing = move_direction
 
 	var jump_down = Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)
@@ -155,7 +182,6 @@ func read_input():
 	if jump_down and not jump_was_down:
 		try_jump()
 
-	# Releasing jump early gives a shorter jump.
 	if not jump_down and jump_was_down and velocity.y < -180.0:
 		velocity.y *= 0.48
 
@@ -235,11 +261,10 @@ func update_limb_physics(delta):
 	previous_velocity = velocity
 
 	# ==============================================================
-	# ARMS
+	# ARMS - physical hanging/swinging motion
 	# ==============================================================
-	# The hand is a spring-driven point with gravity and body inertia.
-	# Its distance from the shoulder is constrained to the proportional
-	# arm length after the spring step.
+	var shoulder = Vector2(0.0, SHOULDER_Y)
+
 	var horizontal_inertia = clampf(
 		acceleration.x * 0.012,
 		-10.0,
@@ -252,14 +277,14 @@ func update_limb_physics(delta):
 		7.0
 	)
 
-	var left_target = Vector2(
-		-ARM_REST_X - horizontal_inertia,
-		ARM_REST_Y + vertical_inertia
+	var left_target = shoulder + Vector2(
+		ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia,
+		ARM_REST_VECTOR.y * ARM_LENGTH + vertical_inertia
 	)
 
-	var right_target = Vector2(
-		ARM_REST_X - horizontal_inertia,
-		ARM_REST_Y + vertical_inertia
+	var right_target = shoulder + Vector2(
+		-ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia,
+		ARM_REST_VECTOR.y * ARM_LENGTH + vertical_inertia
 	)
 
 	left_hand_velocity.y += ARM_GRAVITY * delta
@@ -272,8 +297,8 @@ func update_limb_physics(delta):
 			1.0
 		)
 
-		left_target.y += air_motion * BODY_HEIGHT * 0.065
-		right_target.y += air_motion * BODY_HEIGHT * 0.065
+		left_target.y += air_motion * BODY_HEIGHT * 0.06
+		right_target.y += air_motion * BODY_HEIGHT * 0.06
 
 	if is_on_floor() and not previous_floor_state:
 		left_hand_velocity.y -= 100.0
@@ -288,11 +313,11 @@ func update_limb_physics(delta):
 		delta
 	)
 
-	left_hand_offset = keep_length(
+	left_hand_offset = constrain_from_anchor(
+		shoulder,
 		left_arm_state[0],
 		ARM_LENGTH
 	)
-
 	left_hand_velocity = left_arm_state[1]
 
 	var right_arm_state = spring_vector(
@@ -304,18 +329,16 @@ func update_limb_physics(delta):
 		delta
 	)
 
-	right_hand_offset = keep_length(
+	right_hand_offset = constrain_from_anchor(
+		shoulder,
 		right_arm_state[0],
 		ARM_LENGTH
 	)
-
 	right_hand_velocity = right_arm_state[1]
 
 	# ==============================================================
-	# LEGS
+	# LEGS - upright two-step human gait
 	# ==============================================================
-	# Phase 0 / PI are opposite legs. The foot moves forward during its
-	# swing phase and rises from the floor, while the other foot stays low.
 	if is_on_floor() and speed_ratio > 0.05:
 		walking_phase += delta * (4.5 + speed_ratio * 9.0)
 	else:
@@ -328,6 +351,7 @@ func update_limb_physics(delta):
 	var left_step = sin(walking_phase)
 	var right_step = sin(walking_phase + PI)
 
+	# One foot lifts while the other stays close to the floor.
 	var left_lift = maxf(left_step, 0.0) * WALK_LIFT
 	var right_lift = maxf(right_step, 0.0) * WALK_LIFT
 
@@ -341,17 +365,16 @@ func update_limb_physics(delta):
 		ANKLE_BASE_Y - right_lift
 	)
 
-	# When stationary, keep both feet planted and slightly separated.
 	if speed_ratio <= 0.05 and is_on_floor():
 		left_ankle_target = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
 		right_ankle_target = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
 
-	# Airborne legs tuck slightly instead of continuing to walk.
+	# Airborne legs hang/tuck instead of continuing the walking cycle.
 	if not is_on_floor():
-		left_ankle_target.y += BODY_HEIGHT * 0.055
-		right_ankle_target.y += BODY_HEIGHT * 0.055
-		left_ankle_target.x -= facing * BODY_HEIGHT * 0.05
-		right_ankle_target.x -= facing * BODY_HEIGHT * 0.05
+		left_ankle_target.y += BODY_HEIGHT * 0.05
+		right_ankle_target.y += BODY_HEIGHT * 0.05
+		left_ankle_target.x -= facing * BODY_HEIGHT * 0.045
+		right_ankle_target.x -= facing * BODY_HEIGHT * 0.045
 
 	var left_ankle_state = spring_vector(
 		left_ankle_offset,
@@ -377,7 +400,6 @@ func update_limb_physics(delta):
 	right_ankle_offset = right_ankle_state[0]
 	right_ankle_velocity = right_ankle_state[1]
 
-	# Solve each leg as a proper two-bone chain.
 	left_knee_offset = solve_leg(
 		Vector2(0.0, HIP_Y),
 		left_ankle_offset,
@@ -437,8 +459,7 @@ func solve_leg(hip, ankle, bend_direction):
 	var candidate_a = hip + direction * knee_along + perpendicular * knee_height
 	var candidate_b = hip + direction * knee_along - perpendicular * knee_height
 
-	# Pick the solution whose knee points in the direction the fighter faces.
-	# This gives the familiar forward-bending human knee.
+	# Select the knee that bends slightly forward.
 	if candidate_a.x * bend_direction > candidate_b.x * bend_direction:
 		return candidate_a
 
@@ -455,11 +476,13 @@ func spring_vector(current, current_velocity, target, stiffness, damping, delta)
 	return [current, current_velocity]
 
 
-func keep_length(point, length):
-	if point.length_squared() < 0.001:
-		return Vector2(length, 0.0)
+func constrain_from_anchor(anchor, point, length):
+	var relative = point - anchor
 
-	return point.normalized() * length
+	if relative.length_squared() < 0.001:
+		return anchor + Vector2(length, 0.0)
+
+	return anchor + relative.normalized() * length
 
 
 func get_point(name):
@@ -473,7 +496,7 @@ func get_point(name):
 
 	match name:
 		"head":
-			return Vector2(0.0, -BODY_HEIGHT * 0.615)
+			return Vector2(0.0, HEAD_Y)
 
 		"shoulder_left":
 			return Vector2(0.0, SHOULDER_Y)
@@ -484,8 +507,8 @@ func get_point(name):
 		"hand_left":
 			if attack_timer > 0.0 and facing < 0.0:
 				return Vector2(
-					-ATTACK_REACH * punch,
-					-BODY_HEIGHT * 0.23
+					-ATTACK_REACH,
+					SHOULDER_Y + BODY_HEIGHT * 0.03
 				)
 
 			return left_hand_offset
@@ -493,8 +516,8 @@ func get_point(name):
 		"hand_right":
 			if attack_timer > 0.0 and facing > 0.0:
 				return Vector2(
-					ATTACK_REACH * punch,
-					-BODY_HEIGHT * 0.23
+					ATTACK_REACH,
+					SHOULDER_Y + BODY_HEIGHT * 0.03
 				)
 
 			return right_hand_offset
@@ -519,13 +542,13 @@ func get_point(name):
 
 		"left_foot":
 			return left_ankle_offset + Vector2(
-				facing * WALK_FOOT_FORWARD,
+				facing * FOOT_LENGTH,
 				0.0
 			)
 
 		"right_foot":
 			return right_ankle_offset + Vector2(
-				facing * WALK_FOOT_FORWARD,
+				facing * FOOT_LENGTH,
 				0.0
 			)
 
@@ -551,7 +574,7 @@ func _draw():
 	var left_foot = get_point("left_foot")
 	var right_foot = get_point("right_foot")
 
-	# Arms are single continuous pills, with no artificial elbow joints.
+	# Limbs first, torso second. This hides the roots cleanly.
 	draw_pill(
 		shoulder_left,
 		hand_left,
@@ -566,9 +589,7 @@ func _draw():
 		color
 	)
 
-	# Each leg now has a real thigh + shin chain. The two segments share the
-	# same centerline at the knee, keeping the joint clean without a separate
-	# oversized knee ball.
+	# Long, simple two-bone legs.
 	draw_pill(
 		left_hip,
 		left_knee,
@@ -597,7 +618,7 @@ func _draw():
 		color
 	)
 
-	# Small feet give the lower legs a clear planted direction.
+	# Minimal horizontal feet.
 	draw_pill(
 		left_ankle,
 		left_foot,
@@ -612,16 +633,14 @@ func _draw():
 		color
 	)
 
-	# Torso covers the upper limb roots, keeping shoulders and hips centered
-	# exactly on the body's vertical axis.
+	# Short, narrow upright torso.
 	draw_pill(
-		Vector2(0.0, SHOULDER_Y - 5.0),
+		Vector2(0.0, SHOULDER_Y - 3.0),
 		Vector2(0.0, HIP_Y),
-		BODY_WIDTH * 0.39,
+		BODY_WIDTH * 0.36,
 		color
 	)
 
-	# Head.
 	draw_circle(
 		head,
 		HEAD_RADIUS,
