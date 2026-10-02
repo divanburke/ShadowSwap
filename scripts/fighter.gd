@@ -176,121 +176,73 @@ func update_animation(delta):
 
 
 func get_point(name):
-	# One shared gait value drives the entire body. This is important:
-	# the arms and legs move as one connected human-like walk cycle.
-	var stride = sin(walking_phase) * 11.0 * facing
+	# One straight, continuous pill is used for each arm and each leg.
+	# Both shoulder pivots and both hip pivots stay on the body's centerline.
+	var stride = sin(walking_phase) * 10.0 * facing
 	var opposite_stride = -stride
 
-	# Lift the swinging leg while the planted leg stays low.
-	var left_lift = maxf(stride / 11.0, 0.0) * 6.0
-	var right_lift = maxf(opposite_stride / 11.0, 0.0) * 6.0
+	var arm_swing = stride * 0.70
+	var opposite_arm_swing = -arm_swing
 
-	# Knees move less than the feet, producing a natural bent-leg gait.
-	var left_knee = Vector2(
-		-8.0 + stride * 0.48,
-		24.0 - left_lift
-	)
-
-	var right_knee = Vector2(
-		8.0 + opposite_stride * 0.48,
-		24.0 - right_lift
-	)
-
-	var left_foot = Vector2(
-		-11.0 + stride,
-		49.0 - left_lift
-	)
-
-	var right_foot = Vector2(
-		11.0 + opposite_stride,
-		49.0 - right_lift
-	)
-
-	# Human walking uses opposite arm/leg timing.
-	var arm_stride = stride * 0.72
-
-	var left_elbow = Vector2(
-		-13.0 - arm_stride * 0.45,
-		-13.0
-	)
-
-	var right_elbow = Vector2(
-		13.0 + arm_stride * 0.45,
-		-13.0
-	)
-
-	var left_hand = Vector2(
-		-24.0 - arm_stride,
-		-1.0
-	)
-
-	var right_hand = Vector2(
-		24.0 + arm_stride,
-		-1.0
-	)
-
-	# Attack extends only the arm on the side of the last movement direction.
 	var attack_progress = 0.0
 
 	if attack_timer > 0.0:
 		attack_progress = 1.0 - attack_timer / ATTACK_DURATION
 		attack_progress = clampf(attack_progress, 0.0, 1.0)
 
-	# Smooth punch-out and return.
 	var punch = sin(attack_progress * PI)
-
-	if attack_timer > 0.0:
-		if facing > 0.0:
-			right_elbow = Vector2(15.0 + 8.0 * punch, -20.0)
-			right_hand = Vector2(25.0 + 34.0 * punch, -21.0)
-		else:
-			left_elbow = Vector2(-15.0 - 8.0 * punch, -20.0)
-			left_hand = Vector2(-25.0 - 34.0 * punch, -21.0)
-
-	var body_bob = 0.0
-
-	if is_on_floor() and absf(velocity.x) > 18.0:
-		body_bob = -absf(sin(walking_phase)) * 1.4
 
 	match name:
 		"head":
-			return Vector2(0.0, -48.0 + body_bob)
+			return Vector2(0.0, -48.0)
 
 		"shoulder_left":
-			return Vector2(-9.0, -25.0 + body_bob)
+			return Vector2(0.0, -25.0)
 
 		"shoulder_right":
-			return Vector2(9.0, -25.0 + body_bob)
-
-		"elbow_left":
-			return left_elbow + Vector2(0.0, body_bob)
-
-		"elbow_right":
-			return right_elbow + Vector2(0.0, body_bob)
+			return Vector2(0.0, -25.0)
 
 		"hand_left":
-			return left_hand + Vector2(0.0, body_bob)
+			if attack_timer > 0.0 and facing < 0.0:
+				return Vector2(
+					-44.0 * punch,
+					-22.0
+				)
+
+			return Vector2(
+				-22.0 - arm_swing,
+				-3.0
+			)
 
 		"hand_right":
-			return right_hand + Vector2(0.0, body_bob)
+			if attack_timer > 0.0 and facing > 0.0:
+				return Vector2(
+					44.0 * punch,
+					-22.0
+				)
+
+			return Vector2(
+				22.0 + opposite_arm_swing,
+				-3.0
+			)
 
 		"left_hip":
-			return Vector2(0.0, 16.0 + body_bob)
+			return Vector2(0.0, 16.0)
 
 		"right_hip":
-			return Vector2(0.0, 16.0 + body_bob)
-
-		"left_knee":
-			return left_knee + Vector2(0.0, body_bob)
-
-		"right_knee":
-			return right_knee + Vector2(0.0, body_bob)
+			return Vector2(0.0, 16.0)
 
 		"left_foot":
-			return left_foot + Vector2(0.0, body_bob)
+			return Vector2(
+				-12.0 + stride,
+				49.0
+			)
 
 		"right_foot":
-			return right_foot + Vector2(0.0, body_bob)
+			return Vector2(
+				12.0 + opposite_stride,
+				49.0
+			)
 
 	return Vector2.ZERO
 
@@ -301,15 +253,11 @@ func _draw():
 	var head = get_point("head")
 	var shoulder_left = get_point("shoulder_left")
 	var shoulder_right = get_point("shoulder_right")
-	var elbow_left = get_point("elbow_left")
-	var elbow_right = get_point("elbow_right")
 	var hand_left = get_point("hand_left")
 	var hand_right = get_point("hand_right")
 
 	var left_hip = get_point("left_hip")
 	var right_hip = get_point("right_hip")
-	var left_knee = get_point("left_knee")
-	var right_knee = get_point("right_knee")
 	var left_foot = get_point("left_foot")
 	var right_foot = get_point("right_foot")
 
@@ -320,7 +268,7 @@ func _draw():
 		color
 	)
 
-	# Rounded torso.
+	# Rounded solid torso.
 	draw_pill(
 		Vector2(0.0, -30.0),
 		Vector2(0.0, 16.0),
@@ -328,100 +276,58 @@ func _draw():
 		color
 	)
 
-	# Draw the connection points first. Every limb starts exactly underneath
-	# one of these circles, so there are no visible gaps at the joints.
-	draw_circle(
-		shoulder_left,
-		SHOULDER_JOINT_RADIUS,
-		color
-	)
-
-	draw_circle(
-		shoulder_right,
-		SHOULDER_JOINT_RADIUS,
-		color
-	)
-
-	draw_circle(
-		left_hip,
-		HIP_JOINT_RADIUS,
-		color
-	)
-
-	draw_circle(
-		right_hip,
-		HIP_JOINT_RADIUS,
-		color
-	)
-
-	# Two-segment arms with a small rounded elbow overlap.
+	# One continuous arm per side.
 	draw_pill(
 		shoulder_left,
-		elbow_left,
-		7.0,
-		color
-	)
-
-	draw_pill(
-		elbow_left,
 		hand_left,
-		7.0,
+		8.0,
 		color
 	)
 
 	draw_pill(
 		shoulder_right,
-		elbow_right,
-		7.0,
-		color
-	)
-
-	draw_pill(
-		elbow_right,
 		hand_right,
-		7.0,
+		8.0,
 		color
 	)
 
-	# Two-segment legs. The upper-leg starts at the explicit hip joint.
+	# One continuous leg per side.
 	draw_pill(
 		left_hip,
-		left_knee,
-		8.0,
-		color
-	)
-
-	draw_pill(
-		left_knee,
 		left_foot,
-		8.0,
+		9.0,
 		color
 	)
 
 	draw_pill(
 		right_hip,
-		right_knee,
-		8.0,
-		color
-	)
-
-	draw_pill(
-		right_knee,
 		right_foot,
+		9.0,
+		color
+	)
+
+	# Rounded centers make the centered pivot points clean and continuous.
+	draw_circle(
+		shoulder_left,
 		8.0,
 		color
 	)
 
-	# Cover the elbow seams as well.
 	draw_circle(
-		elbow_left,
-		4.0,
+		shoulder_right,
+		8.0,
 		color
 	)
 
 	draw_circle(
-		elbow_right,
-		4.0,
+		left_hip,
+		8.5,
+		color
+	)
+
+	draw_circle(
+		right_hip,
+		8.5,
 		color
 	)
 
