@@ -69,6 +69,11 @@ const ANKLE_BASE_Y = BODY_HEIGHT * 0.53
 const WALK_STRIDE = BODY_HEIGHT * 0.15
 const WALK_LIFT = BODY_HEIGHT * 0.075
 
+# The visible ankle has a small clearance above the collision floor so the
+# floppy pose cannot visually sink through the platform.
+const GROUND_RENDER_Y = BODY_HEIGHT * 0.49
+const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
+
 const FOOT_SPRING = 48.0
 const FOOT_DAMPING = 8.0
 
@@ -572,6 +577,16 @@ func constrain_from_anchor(anchor, point, length):
 	return anchor + relative.normalized() * length
 
 
+func constrain_ankle_to_floor(point):
+	var posed = pose_point(point)
+
+	if is_on_floor():
+		var maximum_y = GROUND_RENDER_Y - GROUND_RENDER_MARGIN
+		posed.y = minf(posed.y, maximum_y)
+
+	return posed
+
+
 func get_point(name):
 	var attack_progress = 0.0
 
@@ -626,10 +641,10 @@ func get_point(name):
 			return pose_point(right_knee_offset)
 
 		"left_ankle":
-			return pose_point(left_ankle_offset)
+			return constrain_ankle_to_floor(left_ankle_offset)
 
 		"right_ankle":
-			return pose_point(right_ankle_offset)
+			return constrain_ankle_to_floor(right_ankle_offset)
 
 	return Vector2.ZERO
 
