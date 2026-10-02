@@ -191,6 +191,8 @@ func reset_limb_positions():
 
 
 func _physics_process(delta):
+	# Refresh physical contact state before applying movement and pose forces.
+	update_environment_state()
 	read_input()
 	update_movement(delta)
 	update_limb_physics(delta)
