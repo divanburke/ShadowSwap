@@ -45,7 +45,7 @@ const MINT_GREEN = Color("#67e6bc")
 # the correct length while it swings.
 const ARM_LENGTH = BODY_HEIGHT * 0.58
 const ARM_THICKNESS = BODY_WIDTH * 0.25
-const ARM_REST_VECTOR = Vector2(-0.72, 0.69).normalized()
+const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
 
 const ARM_SPRING = 24.0
