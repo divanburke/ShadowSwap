@@ -58,8 +58,8 @@ const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
 const UPPERCUT_ELBOW_ANGLE = deg_to_rad(35.0)
 
-const ARM_SPRING = 14.0
-const ARM_DAMPING = 3.3
+const ARM_SPRING = 12.5
+const ARM_DAMPING = 2.9
 const ARM_GRAVITY = 680.0
 
 # -------------------------------------------------------------------------
@@ -80,10 +80,10 @@ const WALK_STRIDE = BODY_HEIGHT * 0.18
 const WALK_LIFT = BODY_HEIGHT * 0.11
 const WALK_CYCLE_SPEED = 4.0
 
-const PLANTED_FOOT_SPRING = 72.0
-const PLANTED_FOOT_DAMPING = 11.0
-const SWING_FOOT_SPRING = 48.0
-const SWING_FOOT_DAMPING = 7.5
+const PLANTED_FOOT_SPRING = 62.0
+const PLANTED_FOOT_DAMPING = 9.5
+const SWING_FOOT_SPRING = 40.0
+const SWING_FOOT_DAMPING = 6.5
 
 # The visible ankle has a small clearance above the collision floor so the
 # floppy pose cannot visually sink through the platform.
@@ -92,8 +92,8 @@ const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
 
 # Whole-body pose physics. The collision stays upright, but the visible
 # stick figure can lean, sway and settle like a loose body.
-const BODY_ANGULAR_SPRING = 24.0
-const BODY_ANGULAR_DAMPING = 3.9
+const BODY_ANGULAR_SPRING = 19.0
+const BODY_ANGULAR_DAMPING = 3.0
 const BODY_MAX_ANGLE = deg_to_rad(21.0)
 const BODY_AIR_MAX_ANGLE = deg_to_rad(55.0)
 const BODY_ACCEL_LEAN = 0.00055
