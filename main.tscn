@@ -15,28 +15,25 @@ radius = 12.0
 
 [sub_resource type="CapsuleShape2D" id="Shape_upper_arm"]
 radius = 4.0
-height = 28.0
+height = 42.0
 
 [sub_resource type="CapsuleShape2D" id="Shape_lower_arm"]
 radius = 4.0
-height = 26.0
+height = 36.0
 
 [sub_resource type="CapsuleShape2D" id="Shape_upper_leg"]
 radius = 4.5
-height = 32.0
+height = 39.0
 
 [sub_resource type="CapsuleShape2D" id="Shape_lower_leg"]
 radius = 4.5
-height = 34.0
+height = 42.0
 
 [sub_resource type="RectangleShape2D" id="Shape_platform"]
 size = Vector2(220, 18)
 
 [sub_resource type="RectangleShape2D" id="Shape_side_wall"]
 size = Vector2(24, 648)
-
-[sub_resource type="CircleShape2D" id="Shape_joint"]
-radius = 5.0
 
 [node name="Main" type="Node2D"]
 
@@ -127,8 +124,8 @@ polygon = PackedVector2Array(0, -12, 4.59, -11.09, 8.49, -8.49, 11.09, -4.59, 12
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="UpperArmL" type="RigidBody2D" parent="Player"]
-position = Vector2(-22, -2)
-rotation = -0.55
+position = Vector2(-22, -4)
+rotation = 2.44
 collision_layer = 2
 collision_mask = 1
 mass = 0.45
@@ -141,12 +138,12 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_upper_arm")
 
 [node name="Visual" type="Polygon2D" parent="Player/UpperArmL"]
-polygon = PackedVector2Array(-4, -14, 4, -14, 4, 14, -4, 14)
+polygon = PackedVector2Array(-4, -21, 4, -21, 4, 21, -4, 21)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="LowerArmL" type="RigidBody2D" parent="Player"]
-position = Vector2(-42, 10)
-rotation = -0.55
+position = Vector2(-44, 17.5)
+rotation = 2.28
 collision_layer = 2
 collision_mask = 1
 mass = 0.35
@@ -159,12 +156,12 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_lower_arm")
 
 [node name="Visual" type="Polygon2D" parent="Player/LowerArmL"]
-polygon = PackedVector2Array(-4, -13, 4, -13, 4, 13, -4, 13)
+polygon = PackedVector2Array(-4, -18, 4, -18, 4, 18, -4, 18)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="UpperArmR" type="RigidBody2D" parent="Player"]
-position = Vector2(22, -2)
-rotation = 0.55
+position = Vector2(22, -4)
+rotation = 0.70
 collision_layer = 2
 collision_mask = 1
 mass = 0.45
@@ -177,12 +174,12 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_upper_arm")
 
 [node name="Visual" type="Polygon2D" parent="Player/UpperArmR"]
-polygon = PackedVector2Array(-4, -14, 4, -14, 4, 14, -4, 14)
+polygon = PackedVector2Array(-4, -21, 4, -21, 4, 21, -4, 21)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="LowerArmR" type="RigidBody2D" parent="Player"]
-position = Vector2(42, 10)
-rotation = 0.55
+position = Vector2(44, 17.5)
+rotation = 0.86
 collision_layer = 2
 collision_mask = 1
 mass = 0.35
@@ -195,12 +192,12 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_lower_arm")
 
 [node name="Visual" type="Polygon2D" parent="Player/LowerArmR"]
-polygon = PackedVector2Array(-4, -13, 4, -13, 4, 13, -4, 13)
+polygon = PackedVector2Array(-4, -18, 4, -18, 4, 18, -4, 18)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="UpperLegL" type="RigidBody2D" parent="Player"]
-position = Vector2(-10, 31)
-rotation = -0.13
+position = Vector2(-10, 37)
+rotation = 1.77
 collision_layer = 2
 collision_mask = 1
 mass = 0.75
@@ -213,12 +210,12 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_upper_leg")
 
 [node name="Visual" type="Polygon2D" parent="Player/UpperLegL"]
-polygon = PackedVector2Array(-5, -16, 5, -16, 5, 16, -5, 16)
+polygon = PackedVector2Array(-5, -19.5, 5, -19.5, 5, 19.5, -5, 19.5)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="LowerLegL" type="RigidBody2D" parent="Player"]
-position = Vector2(-13, 62)
-rotation = 0.06
+position = Vector2(-14.5, 69.5)
+rotation = 1.66
 collision_layer = 2
 collision_mask = 1
 mass = 0.65
@@ -231,12 +228,12 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_lower_leg")
 
 [node name="Visual" type="Polygon2D" parent="Player/LowerLegL"]
-polygon = PackedVector2Array(-5, -17, 5, -17, 5, 17, -5, 17)
+polygon = PackedVector2Array(-5, -21, 5, -21, 5, 21, -5, 21)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="UpperLegR" type="RigidBody2D" parent="Player"]
-position = Vector2(10, 31)
-rotation = 0.13
+position = Vector2(10, 37)
+rotation = 1.37
 collision_layer = 2
 collision_mask = 1
 mass = 0.75
@@ -249,12 +246,12 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_upper_leg")
 
 [node name="Visual" type="Polygon2D" parent="Player/UpperLegR"]
-polygon = PackedVector2Array(-5, -16, 5, -16, 5, 16, -5, 16)
+polygon = PackedVector2Array(-5, -19.5, 5, -19.5, 5, 19.5, -5, 19.5)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="LowerLegR" type="RigidBody2D" parent="Player"]
-position = Vector2(13, 62)
-rotation = -0.06
+position = Vector2(14.5, 69.5)
+rotation = 1.49
 collision_layer = 2
 collision_mask = 1
 mass = 0.65
@@ -267,7 +264,7 @@ physics_material_override = SubResource("PhysicsMaterial_player")
 shape = SubResource("Shape_lower_leg")
 
 [node name="Visual" type="Polygon2D" parent="Player/LowerLegR"]
-polygon = PackedVector2Array(-5, -17, 5, -17, 5, 17, -5, 17)
+polygon = PackedVector2Array(-5, -21, 5, -21, 5, 21, -5, 21)
 color = Color(0.93, 0.94, 0.96, 1)
 
 [node name="NeckJoint" type="PinJoint2D" parent="Player"]
@@ -283,7 +280,7 @@ node_b = NodePath("../UpperArmL")
 softness = 0.0
 
 [node name="ElbowJointL" type="PinJoint2D" parent="Player"]
-position = Vector2(-35, 6)
+position = Vector2(-35, 7)
 node_a = NodePath("../UpperArmL")
 node_b = NodePath("../LowerArmL")
 softness = 0.0
@@ -295,7 +292,7 @@ node_b = NodePath("../UpperArmR")
 softness = 0.0
 
 [node name="ElbowJointR" type="PinJoint2D" parent="Player"]
-position = Vector2(35, 6)
+position = Vector2(35, 7)
 node_a = NodePath("../UpperArmR")
 node_b = NodePath("../LowerArmR")
 softness = 0.0
@@ -307,7 +304,7 @@ node_b = NodePath("../UpperLegL")
 softness = 0.0
 
 [node name="KneeJointL" type="PinJoint2D" parent="Player"]
-position = Vector2(-11, 46)
+position = Vector2(-13, 52)
 node_a = NodePath("../UpperLegL")
 node_b = NodePath("../LowerLegL")
 softness = 0.0
@@ -319,7 +316,7 @@ node_b = NodePath("../UpperLegR")
 softness = 0.0
 
 [node name="KneeJointR" type="PinJoint2D" parent="Player"]
-position = Vector2(11, 46)
+position = Vector2(13, 52)
 node_a = NodePath("../UpperLegR")
 node_b = NodePath("../LowerLegR")
 softness = 0.0
