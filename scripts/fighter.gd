@@ -292,6 +292,9 @@ func build_ragdoll(start_position):
 		parts[key].collision_layer = 2
 		parts[key].collision_mask = 1
 
+	for key in ["RightShin", "LeftShin"]:
+		parts[key].continuous_cd = RigidBody2D.CCD_MODE_CAST_SHAPE
+
 	# Add joints after all bodies exist so their paths are valid.
 	make_pin_joint(
 		torso,
@@ -587,8 +590,15 @@ func apply_character_velocity_change(delta_velocity):
 
 func detect_grounded():
 	var torso = parts["Torso"]
-	var origin = torso.global_position + Vector2(0.0, 15.0)
-	var target = origin + Vector2(0.0, 16.0)
+
+	# The torso is above the floor when standing, so the old short ray never
+	# reached the platform. Start near the bottom of the torso and cast beyond
+	# the floor contact point.
+	var origin = torso.global_position + Vector2(
+		0.0,
+		TORSO_HEIGHT * 0.45
+	)
+	var target = origin + Vector2(0.0, 28.0)
 
 	var result = raycast(origin, target)
 
