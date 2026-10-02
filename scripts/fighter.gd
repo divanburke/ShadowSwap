@@ -7,13 +7,18 @@ extends CharacterBody2D
 #   - one solid-color body
 #   - movement
 #   - jumping
-#   - a small walking animation
+#   - a human-like procedural walk cycle
+#   - physics-driven arm swing
 #   - a directional arm hit
 #
 # No AI, weapons, ragdolls, damage systems, rounds, or extra combat systems.
 
 const BODY_WIDTH = 28.0
 const BODY_HEIGHT = 78.0
+
+const HEAD_RADIUS = BODY_HEIGHT * 0.18
+const SHOULDER_Y = -BODY_HEIGHT * 0.32
+const HIP_Y = BODY_HEIGHT * 0.205
 
 const MOVE_SPEED = 320.0
 const GROUND_ACCELERATION = 2200.0
@@ -30,30 +35,53 @@ const ATTACK_COOLDOWN = 0.26
 
 const MINT_GREEN = Color("#67e6bc")
 
-# Arms behave like lightweight masses hanging from the shoulders.
-# Walking acceleration, jumping and gravity all influence their motion.
+# -------------------------------------------------------------------------
+# Human-proportioned arms
+# -------------------------------------------------------------------------
+# Arm length is derived from the body height instead of being a fixed
+# pixel value, so the proportions stay consistent if the fighter is resized.
+const ARM_LENGTH = BODY_HEIGHT * 0.52
+const ARM_THICKNESS = BODY_WIDTH * 0.285
+const ARM_REST_X = ARM_LENGTH * 0.70
+const ARM_REST_Y = ARM_LENGTH * 0.714
+
 const ARM_SPRING = 24.0
 const ARM_DAMPING = 5.2
 const ARM_GRAVITY = 620.0
+const ATTACK_REACH = ARM_LENGTH * 1.12
 
-# Feet use a gentle procedural gait because a simple two-foot walk cycle is
-# much more stable and readable than trying to balance physical leg bodies.
-const FOOT_SPRING = 50.0
-const FOOT_DAMPING = 8.5
-const WALK_STRIDE = 10.0
-const WALK_LIFT = 4.0
+# -------------------------------------------------------------------------
+# Human-like legs
+# -------------------------------------------------------------------------
+# A real leg is treated as two connected bones: thigh + shin. We solve the
+# knee position from a desired ankle position with a two-bone IK calculation.
+const THIGH_LENGTH = BODY_HEIGHT * 0.36
+const SHIN_LENGTH = BODY_HEIGHT * 0.35
+const LEG_THICKNESS = BODY_WIDTH * 0.30
+
+const ANKLE_BASE_X = BODY_WIDTH * 0.36
+const ANKLE_BASE_Y = BODY_HEIGHT * 0.63
+const WALK_STRIDE = BODY_HEIGHT * 0.17
+const WALK_LIFT = BODY_HEIGHT * 0.085
+const WALK_FOOT_FORWARD = BODY_HEIGHT * 0.09
+
+const FOOT_SPRING = 58.0
+const FOOT_DAMPING = 9.0
 
 var facing = 1.0
 
-var left_hand_offset = Vector2(-22.0, -3.0)
-var right_hand_offset = Vector2(22.0, -3.0)
+var left_hand_offset = Vector2(-ARM_REST_X, ARM_REST_Y)
+var right_hand_offset = Vector2(ARM_REST_X, ARM_REST_Y)
 var left_hand_velocity = Vector2.ZERO
 var right_hand_velocity = Vector2.ZERO
 
-var left_foot_offset = Vector2(-12.0, 49.0)
-var right_foot_offset = Vector2(12.0, 49.0)
-var left_foot_velocity = Vector2.ZERO
-var right_foot_velocity = Vector2.ZERO
+var left_ankle_offset = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
+var right_ankle_offset = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
+var left_ankle_velocity = Vector2.ZERO
+var right_ankle_velocity = Vector2.ZERO
+
+var left_knee_offset = Vector2.ZERO
+var right_knee_offset = Vector2.ZERO
 
 var walking_phase = 0.0
 var previous_velocity = Vector2.ZERO
@@ -206,11 +234,12 @@ func update_limb_physics(delta):
 
 	previous_velocity = velocity
 
-	# --------------------------------------------------------------
-	# ARMS: spring + gravity + real body acceleration.
-	# --------------------------------------------------------------
-	# The shoulders stay fixed. The hands are allowed to lag behind the
-	# body, fall under gravity, and swing when the body changes velocity.
+	# ==============================================================
+	# ARMS
+	# ==============================================================
+	# The hand is a spring-driven point with gravity and body inertia.
+	# Its distance from the shoulder is constrained to the proportional
+	# arm length after the spring step.
 	var horizontal_inertia = clampf(
 		acceleration.x * 0.012,
 		-10.0,
@@ -224,32 +253,28 @@ func update_limb_physics(delta):
 	)
 
 	var left_target = Vector2(
-		-22.0 - horizontal_inertia,
-		-3.0 + vertical_inertia
+		-ARM_REST_X - horizontal_inertia,
+		ARM_REST_Y + vertical_inertia
 	)
 
 	var right_target = Vector2(
-		22.0 - horizontal_inertia,
-		-3.0 + vertical_inertia
+		ARM_REST_X - horizontal_inertia,
+		ARM_REST_Y + vertical_inertia
 	)
 
-	# Gravity makes the arms naturally drop while airborne instead of
-	# snapping to an animation pose.
 	left_hand_velocity.y += ARM_GRAVITY * delta
 	right_hand_velocity.y += ARM_GRAVITY * delta
 
-	# Jumping pushes both arms upward slightly, falling lets them trail down.
 	if not is_on_floor():
-		var air_angle = clampf(
+		var air_motion = clampf(
 			velocity.y / JUMP_SPEED,
 			-1.0,
 			1.0
 		)
 
-		left_target.y += air_angle * 5.0
-		right_target.y += air_angle * 5.0
+		left_target.y += air_motion * BODY_HEIGHT * 0.065
+		right_target.y += air_motion * BODY_HEIGHT * 0.065
 
-	# A landing gives both arms a small physical swing.
 	if is_on_floor() and not previous_floor_state:
 		left_hand_velocity.y -= 100.0
 		right_hand_velocity.y -= 100.0
@@ -263,7 +288,11 @@ func update_limb_physics(delta):
 		delta
 	)
 
-	left_hand_offset = left_arm_state[0]
+	left_hand_offset = keep_length(
+		left_arm_state[0],
+		ARM_LENGTH
+	)
+
 	left_hand_velocity = left_arm_state[1]
 
 	var right_arm_state = spring_vector(
@@ -275,73 +304,145 @@ func update_limb_physics(delta):
 		delta
 	)
 
-	right_hand_offset = right_arm_state[0]
+	right_hand_offset = keep_length(
+		right_arm_state[0],
+		ARM_LENGTH
+	)
+
 	right_hand_velocity = right_arm_state[1]
 
-	# --------------------------------------------------------------
-	# LEGS: simple human two-step walking gait.
-	# --------------------------------------------------------------
+	# ==============================================================
+	# LEGS
+	# ==============================================================
+	# Phase 0 / PI are opposite legs. The foot moves forward during its
+	# swing phase and rises from the floor, while the other foot stays low.
 	if is_on_floor() and speed_ratio > 0.05:
-		walking_phase += delta * (5.0 + speed_ratio * 10.0)
+		walking_phase += delta * (4.5 + speed_ratio * 9.0)
 	else:
 		walking_phase = move_toward(
 			walking_phase,
 			0.0,
-			delta * 2.5
+			delta * 2.8
 		)
 
-	var step_a = sin(walking_phase) * WALK_STRIDE
-	var step_b = sin(walking_phase + PI) * WALK_STRIDE
+	var left_step = sin(walking_phase)
+	var right_step = sin(walking_phase + PI)
 
-	var lift_a = maxf(
-		sin(walking_phase),
-		0.0
-	) * WALK_LIFT
+	var left_lift = maxf(left_step, 0.0) * WALK_LIFT
+	var right_lift = maxf(right_step, 0.0) * WALK_LIFT
 
-	var lift_b = maxf(
-		sin(walking_phase + PI),
-		0.0
-	) * WALK_LIFT
-
-	var left_foot_target = Vector2(
-		-12.0 + step_a,
-		49.0 - lift_a
+	var left_ankle_target = Vector2(
+		-ANKLE_BASE_X + left_step * WALK_STRIDE,
+		ANKLE_BASE_Y - left_lift
 	)
 
-	var right_foot_target = Vector2(
-		12.0 + step_b,
-		49.0 - lift_b
+	var right_ankle_target = Vector2(
+		ANKLE_BASE_X + right_step * WALK_STRIDE,
+		ANKLE_BASE_Y - right_lift
 	)
 
+	# When stationary, keep both feet planted and slightly separated.
+	if speed_ratio <= 0.05 and is_on_floor():
+		left_ankle_target = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
+		right_ankle_target = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
+
+	# Airborne legs tuck slightly instead of continuing to walk.
 	if not is_on_floor():
-		left_foot_target.y += 4.0
-		right_foot_target.y += 4.0
+		left_ankle_target.y += BODY_HEIGHT * 0.055
+		right_ankle_target.y += BODY_HEIGHT * 0.055
+		left_ankle_target.x -= facing * BODY_HEIGHT * 0.05
+		right_ankle_target.x -= facing * BODY_HEIGHT * 0.05
 
-	var left_foot_state = spring_vector(
-		left_foot_offset,
-		left_foot_velocity,
-		left_foot_target,
+	var left_ankle_state = spring_vector(
+		left_ankle_offset,
+		left_ankle_velocity,
+		left_ankle_target,
 		FOOT_SPRING,
 		FOOT_DAMPING,
 		delta
 	)
 
-	left_foot_offset = left_foot_state[0]
-	left_foot_velocity = left_foot_state[1]
+	left_ankle_offset = left_ankle_state[0]
+	left_ankle_velocity = left_ankle_state[1]
 
-	var right_foot_state = spring_vector(
-		right_foot_offset,
-		right_foot_velocity,
-		right_foot_target,
+	var right_ankle_state = spring_vector(
+		right_ankle_offset,
+		right_ankle_velocity,
+		right_ankle_target,
 		FOOT_SPRING,
 		FOOT_DAMPING,
 		delta
 	)
 
-	right_foot_offset = right_foot_state[0]
-	right_foot_velocity = right_foot_state[1]
+	right_ankle_offset = right_ankle_state[0]
+	right_ankle_velocity = right_ankle_state[1]
+
+	# Solve each leg as a proper two-bone chain.
+	left_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		left_ankle_offset,
+		facing
+	)
+
+	right_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		right_ankle_offset,
+		facing
+	)
 
 	previous_floor_state = is_on_floor()
+
+
+func solve_leg(hip, ankle, bend_direction):
+	var to_ankle = ankle - hip
+	var distance = to_ankle.length()
+
+	if distance < 0.001:
+		return hip + Vector2(0.0, THIGH_LENGTH)
+
+	var max_reach = THIGH_LENGTH + SHIN_LENGTH
+	var min_reach = absf(THIGH_LENGTH - SHIN_LENGTH)
+
+	distance = clampf(
+		distance,
+		min_reach + 0.001,
+		max_reach - 0.001
+	)
+
+	var direction = to_ankle / to_ankle.length()
+	var perpendicular = Vector2(
+		-direction.y,
+		direction.x
+	)
+
+	var cos_knee_angle = clampf(
+		(
+			THIGH_LENGTH * THIGH_LENGTH +
+			distance * distance -
+			SHIN_LENGTH * SHIN_LENGTH
+		) / (2.0 * THIGH_LENGTH * distance),
+		-1.0,
+		1.0
+	)
+
+	var knee_along = THIGH_LENGTH * cos(acos(cos_knee_angle))
+	var knee_height = sqrt(
+		maxf(
+			THIGH_LENGTH * THIGH_LENGTH -
+			knee_along * knee_along,
+			0.0
+		)
+	)
+
+	var candidate_a = hip + direction * knee_along + perpendicular * knee_height
+	var candidate_b = hip + direction * knee_along - perpendicular * knee_height
+
+	# Pick the solution whose knee points in the direction the fighter faces.
+	# This gives the familiar forward-bending human knee.
+	if candidate_a.x * bend_direction > candidate_b.x * bend_direction:
+		return candidate_a
+
+	return candidate_b
 
 
 func spring_vector(current, current_velocity, target, stiffness, damping, delta):
@@ -352,6 +453,13 @@ func spring_vector(current, current_velocity, target, stiffness, damping, delta)
 	current += current_velocity * delta
 
 	return [current, current_velocity]
+
+
+func keep_length(point, length):
+	if point.length_squared() < 0.001:
+		return Vector2(length, 0.0)
+
+	return point.normalized() * length
 
 
 func get_point(name):
@@ -365,19 +473,19 @@ func get_point(name):
 
 	match name:
 		"head":
-			return Vector2(0.0, -48.0)
+			return Vector2(0.0, -BODY_HEIGHT * 0.615)
 
 		"shoulder_left":
-			return Vector2(0.0, -25.0)
+			return Vector2(0.0, SHOULDER_Y)
 
 		"shoulder_right":
-			return Vector2(0.0, -25.0)
+			return Vector2(0.0, SHOULDER_Y)
 
 		"hand_left":
 			if attack_timer > 0.0 and facing < 0.0:
 				return Vector2(
-					-44.0 * punch,
-					-22.0
+					-ATTACK_REACH * punch,
+					-BODY_HEIGHT * 0.23
 				)
 
 			return left_hand_offset
@@ -385,23 +493,41 @@ func get_point(name):
 		"hand_right":
 			if attack_timer > 0.0 and facing > 0.0:
 				return Vector2(
-					44.0 * punch,
-					-22.0
+					ATTACK_REACH * punch,
+					-BODY_HEIGHT * 0.23
 				)
 
 			return right_hand_offset
 
 		"left_hip":
-			return Vector2(0.0, 16.0)
+			return Vector2(0.0, HIP_Y)
 
 		"right_hip":
-			return Vector2(0.0, 16.0)
+			return Vector2(0.0, HIP_Y)
+
+		"left_knee":
+			return left_knee_offset
+
+		"right_knee":
+			return right_knee_offset
+
+		"left_ankle":
+			return left_ankle_offset
+
+		"right_ankle":
+			return right_ankle_offset
 
 		"left_foot":
-			return left_foot_offset
+			return left_ankle_offset + Vector2(
+				facing * WALK_FOOT_FORWARD,
+				0.0
+			)
 
 		"right_foot":
-			return right_foot_offset
+			return right_ankle_offset + Vector2(
+				facing * WALK_FOOT_FORWARD,
+				0.0
+			)
 
 	return Vector2.ZERO
 
@@ -410,57 +536,95 @@ func _draw():
 	var color = MINT_GREEN
 
 	var head = get_point("head")
+
 	var shoulder_left = get_point("shoulder_left")
 	var shoulder_right = get_point("shoulder_right")
 	var hand_left = get_point("hand_left")
 	var hand_right = get_point("hand_right")
+
 	var left_hip = get_point("left_hip")
 	var right_hip = get_point("right_hip")
+	var left_knee = get_point("left_knee")
+	var right_knee = get_point("right_knee")
+	var left_ankle = get_point("left_ankle")
+	var right_ankle = get_point("right_ankle")
 	var left_foot = get_point("left_foot")
 	var right_foot = get_point("right_foot")
 
-	# Limbs are drawn first. The torso then covers their roots, preventing
-	# bumps or blobs at the shoulder and hip connections.
+	# Arms are single continuous pills, with no artificial elbow joints.
 	draw_pill(
 		shoulder_left,
 		hand_left,
-		8.0,
+		ARM_THICKNESS,
 		color
 	)
 
 	draw_pill(
 		shoulder_right,
 		hand_right,
-		8.0,
+		ARM_THICKNESS,
+		color
+	)
+
+	# Each leg now has a real thigh + shin chain. The two segments share the
+	# same centerline at the knee, keeping the joint clean without a separate
+	# oversized knee ball.
+	draw_pill(
+		left_hip,
+		left_knee,
+		LEG_THICKNESS,
 		color
 	)
 
 	draw_pill(
-		left_hip,
-		left_foot,
-		9.0,
+		left_knee,
+		left_ankle,
+		LEG_THICKNESS,
 		color
 	)
 
 	draw_pill(
 		right_hip,
-		right_foot,
-		9.0,
+		right_knee,
+		LEG_THICKNESS,
 		color
 	)
 
-	# Torso covers the upper ends of the limbs.
 	draw_pill(
-		Vector2(0.0, -30.0),
-		Vector2(0.0, 16.0),
-		11.0,
+		right_knee,
+		right_ankle,
+		LEG_THICKNESS,
+		color
+	)
+
+	# Small feet give the lower legs a clear planted direction.
+	draw_pill(
+		left_ankle,
+		left_foot,
+		LEG_THICKNESS,
+		color
+	)
+
+	draw_pill(
+		right_ankle,
+		right_foot,
+		LEG_THICKNESS,
+		color
+	)
+
+	# Torso covers the upper limb roots, keeping shoulders and hips centered
+	# exactly on the body's vertical axis.
+	draw_pill(
+		Vector2(0.0, SHOULDER_Y - 5.0),
+		Vector2(0.0, HIP_Y),
+		BODY_WIDTH * 0.39,
 		color
 	)
 
 	# Head.
 	draw_circle(
 		head,
-		14.0,
+		HEAD_RADIUS,
 		color
 	)
 
