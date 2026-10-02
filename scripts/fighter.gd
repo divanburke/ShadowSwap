@@ -345,7 +345,7 @@ func receive_attack_hit(impact, _kind):
 	if defeated:
 		return
 
-	velocity += impact * 0.07
+	velocity += impact * 0.14
 	hit_stun_timer = HIT_STUN
 
 
