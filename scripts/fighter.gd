@@ -23,10 +23,10 @@ const SHOULDER_Y = -25.0
 const HIP_Y = -8.0
 
 const MOVE_SPEED = 380.0
-const GROUND_ACCELERATION = 3000.0
-const GROUND_DECELERATION = 1450.0
-const AIR_ACCELERATION = 1550.0
-const AIR_DECELERATION = 95.0
+const GROUND_ACCELERATION = 1800.0
+const GROUND_DECELERATION = 1800.0
+const AIR_ACCELERATION = 950.0
+const AIR_DECELERATION = 120.0
 
 const GRAVITY = 1500.0
 const FAST_FALL_ACCELERATION = 1200.0
@@ -252,12 +252,25 @@ func update_movement(delta):
 
 	if move_direction != 0.0:
 		var speed_error = move_direction * MOVE_SPEED - linear_velocity.x
-		var force = speed_error * mass * acceleration
-		apply_central_force(Vector2(force, 0.0))
+		var desired_acceleration = clampf(
+			speed_error * 7.5,
+			-acceleration,
+			acceleration
+		)
+
+		apply_central_force(
+			Vector2(desired_acceleration * mass, 0.0)
+		)
 	else:
-		# Keep some momentum in the air, but brake more strongly on the floor.
-		var brake_force = -linear_velocity.x * mass * braking
-		apply_central_force(Vector2(brake_force, 0.0))
+		var braking_acceleration = clampf(
+			-linear_velocity.x * 5.0,
+			-braking,
+			braking
+		)
+
+		apply_central_force(
+			Vector2(braking_acceleration * mass, 0.0)
+		)
 
 	if fast_fall and not grounded:
 		apply_central_force(
