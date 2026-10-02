@@ -44,6 +44,8 @@ const MINT_GREEN = Color("#67e6bc")
 # calculated from the shoulder, not from the torso center, so the arm keeps
 # the correct length while it swings.
 const ARM_LENGTH = BODY_HEIGHT * 0.53
+const UPPER_ARM_LENGTH = ARM_LENGTH * 0.52
+const FOREARM_LENGTH = ARM_LENGTH * 0.48
 const ARM_THICKNESS = BODY_WIDTH * 0.19
 const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
@@ -102,6 +104,8 @@ var left_hand_offset = Vector2.ZERO
 var right_hand_offset = Vector2.ZERO
 var left_hand_velocity = Vector2.ZERO
 var right_hand_velocity = Vector2.ZERO
+var left_elbow_offset = Vector2.ZERO
+var right_elbow_offset = Vector2.ZERO
 
 var left_ankle_offset = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
 var right_ankle_offset = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
@@ -167,6 +171,9 @@ func reset_limb_positions():
 
 	left_hand_velocity = Vector2.ZERO
 	right_hand_velocity = Vector2.ZERO
+
+	left_elbow_offset = Vector2(0.0, SHOULDER_Y) + left_rest.normalized() * UPPER_ARM_LENGTH
+	right_elbow_offset = Vector2(0.0, SHOULDER_Y) + right_rest.normalized() * UPPER_ARM_LENGTH
 
 	left_knee_offset = Vector2(-3.0, HIP_Y + THIGH_LENGTH)
 	right_knee_offset = Vector2(3.0, HIP_Y + THIGH_LENGTH)
@@ -365,6 +372,21 @@ func update_limb_physics(delta):
 		ARM_LENGTH
 	)
 	right_hand_velocity = right_arm_state[1]
+
+	# Each arm is now a two-bone chain. The elbow is solved from the
+	# shoulder and hand while keeping the upper/forearm lengths fixed,
+	# making the joint quite rigid without adding another floppy spring.
+	left_elbow_offset = solve_arm_joint(
+		shoulder,
+		left_hand_offset,
+		1.0
+	)
+
+	right_elbow_offset = solve_arm_joint(
+		shoulder,
+		right_hand_offset,
+		-1.0
+	)
 
 	# ==============================================================
 	# LEGS - human walk cycle
@@ -629,6 +651,53 @@ func pose_point(point):
 	return pivot + relative + Vector2(0.0, body_bob)
 
 
+func solve_arm_joint(shoulder, hand, bend_direction):
+	var to_hand = hand - shoulder
+	var distance = to_hand.length()
+
+	if distance < 0.001:
+		return shoulder + Vector2(UPPER_ARM_LENGTH * bend_direction, 0.0)
+
+	var max_reach = UPPER_ARM_LENGTH + FOREARM_LENGTH
+	var min_reach = absf(UPPER_ARM_LENGTH - FOREARM_LENGTH)
+
+	var solved_distance = clampf(
+		distance,
+		min_reach + 0.001,
+		max_reach - 0.001
+	)
+
+	var direction = to_hand / distance
+	var perpendicular = Vector2(-direction.y, direction.x)
+
+	var cos_elbow = clampf(
+		(
+			UPPER_ARM_LENGTH * UPPER_ARM_LENGTH +
+			solved_distance * solved_distance -
+			FOREARM_LENGTH * FOREARM_LENGTH
+		) / (2.0 * UPPER_ARM_LENGTH * solved_distance),
+		-1.0,
+		1.0
+	)
+
+	var along = UPPER_ARM_LENGTH * cos(acos(cos_elbow))
+	var bend = sqrt(
+		maxf(
+			UPPER_ARM_LENGTH * UPPER_ARM_LENGTH -
+			along * along,
+			0.0
+		)
+	)
+
+	var candidate_a = shoulder + direction * along + perpendicular * bend
+	var candidate_b = shoulder + direction * along - perpendicular * bend
+
+	if candidate_a.x * bend_direction > candidate_b.x * bend_direction:
+		return candidate_a
+
+	return candidate_b
+
+
 func spring_vector(current, current_velocity, target, stiffness, damping, delta):
 	var acceleration = (target - current) * stiffness
 	acceleration -= current_velocity * damping
@@ -699,6 +768,12 @@ func get_point(name):
 
 			return pose_point(right_hand_offset)
 
+		"elbow_left":
+			return pose_point(left_elbow_offset)
+
+		"elbow_right":
+			return pose_point(right_elbow_offset)
+
 		"left_hip":
 			return pose_point(Vector2(0.0, HIP_Y))
 
@@ -737,9 +812,19 @@ func _draw():
 	var left_ankle = get_point("left_ankle")
 	var right_ankle = get_point("right_ankle")
 
-	# Limbs first, torso second. This hides the roots cleanly.
+	var elbow_left = get_point("elbow_left")
+	var elbow_right = get_point("elbow_right")
+
+	# Limbs first, torso second. Each arm is split at a rigid elbow joint.
 	draw_pill(
 		shoulder_left,
+		elbow_left,
+		ARM_THICKNESS,
+		color
+	)
+
+	draw_pill(
+		elbow_left,
 		hand_left,
 		ARM_THICKNESS,
 		color
@@ -747,8 +832,27 @@ func _draw():
 
 	draw_pill(
 		shoulder_right,
+		elbow_right,
+		ARM_THICKNESS,
+		color
+	)
+
+	draw_pill(
+		elbow_right,
 		hand_right,
 		ARM_THICKNESS,
+		color
+	)
+
+	draw_circle(
+		elbow_left,
+		ARM_THICKNESS * 0.62,
+		color
+	)
+
+	draw_circle(
+		elbow_right,
+		ARM_THICKNESS * 0.62,
 		color
 	)
 
