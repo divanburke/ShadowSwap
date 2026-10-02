@@ -132,6 +132,8 @@ var attack_cooldown = 0.0
 var jump_was_down = false
 var wall_jump_cooldown = 0.0
 var fast_fall = false
+var grounded = false
+var wall_side = 0.0
 
 
 func setup(start_position):
