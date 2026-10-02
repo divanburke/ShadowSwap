@@ -48,7 +48,7 @@ func start_round():
 		self,
 		"PLAYER",
 		true,
-		Vector2(270, 505),
+		Vector2(270, 530),
 		Color("#f4f7ff"),
 		Color("#55d6ff")
 	)
@@ -60,7 +60,7 @@ func start_round():
 		self,
 		"AI",
 		false,
-		Vector2(882, 505),
+		Vector2(882, 530),
 		Color("#e4d9ff"),
 		Color("#b993ff")
 	)
