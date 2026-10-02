@@ -29,6 +29,8 @@ const ATTACK_DURATION = 0.18
 const ATTACK_COOLDOWN = 0.26
 
 const MINT_GREEN = Color("#67e6bc")
+const SHOULDER_JOINT_RADIUS = 7.0
+const HIP_JOINT_RADIUS = 8.0
 
 var facing = 1.0
 var walking_phase = 0.0
@@ -326,7 +328,33 @@ func _draw():
 		color
 	)
 
-	# Two-segment arms with rounded joints.
+	# Draw the connection points first. Every limb starts exactly underneath
+	# one of these circles, so there are no visible gaps at the joints.
+	draw_circle(
+		shoulder_left,
+		SHOULDER_JOINT_RADIUS,
+		color
+	)
+
+	draw_circle(
+		shoulder_right,
+		SHOULDER_JOINT_RADIUS,
+		color
+	)
+
+	draw_circle(
+		left_hip,
+		HIP_JOINT_RADIUS,
+		color
+	)
+
+	draw_circle(
+		right_hip,
+		HIP_JOINT_RADIUS,
+		color
+	)
+
+	# Two-segment arms with a small rounded elbow overlap.
 	draw_pill(
 		shoulder_left,
 		elbow_left,
@@ -355,7 +383,7 @@ func _draw():
 		color
 	)
 
-	# Two-segment legs. The upper-leg starts exactly on the hip point.
+	# Two-segment legs. The upper-leg starts at the explicit hip joint.
 	draw_pill(
 		left_hip,
 		left_knee,
@@ -381,6 +409,19 @@ func _draw():
 		right_knee,
 		right_foot,
 		8.0,
+		color
+	)
+
+	# Cover the elbow seams as well.
+	draw_circle(
+		elbow_left,
+		4.0,
+		color
+	)
+
+	draw_circle(
+		elbow_right,
+		4.0,
 		color
 	)
 
