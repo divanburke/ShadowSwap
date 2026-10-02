@@ -59,7 +59,7 @@ func _draw():
 	draw_string(
 		ThemeDB.fallback_font,
 		Vector2(430.0, 42.0),
-		"A / D or ← / →   MOVE        W or ↑   JUMP        J   HIT",
+		"A / D or ← / →   MOVE        W / ↑   JUMP        S / ↓   FAST FALL        J   HIT",
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1.0,
 		18,
