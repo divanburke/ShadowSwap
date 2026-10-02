@@ -43,13 +43,13 @@ const MINT_GREEN = Color("#67e6bc")
 # Arm length is tied directly to the body height. The hand position is
 # calculated from the shoulder, not from the torso center, so the arm keeps
 # the correct length while it swings.
-const ARM_LENGTH = BODY_HEIGHT * 0.58
+const ARM_LENGTH = BODY_HEIGHT * 0.53
 const ARM_THICKNESS = BODY_WIDTH * 0.19
 const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
 const ATTACK_REACH = ARM_LENGTH * 1.15
 
-const ARM_SPRING = 17.0
-const ARM_DAMPING = 4.0
+const ARM_SPRING = 16.0
+const ARM_DAMPING = 3.7
 const ARM_GRAVITY = 680.0
 
 # -------------------------------------------------------------------------
