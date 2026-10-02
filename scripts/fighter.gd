@@ -13,12 +13,12 @@ extends Node2D
 # with forces and torques, so collisions can disturb the pose and the body
 # can recover from that disturbance.
 
-const BODY_WIDTH := 28.0
-const BODY_HEIGHT := 78.0
+const BODY_WIDTH := 22.0
+const BODY_HEIGHT := 72.0
 const HEAD_RADIUS := 11.0
-const HEAD_Y := -48.0
-const SHOULDER_Y := -25.0
-const HIP_Y := -8.0
+const HEAD_Y := -46.0
+const SHOULDER_Y := -22.0
+const HIP_Y := -5.0
 
 const MOVE_SPEED := 320.0
 const MOVE_FORCE := 2100.0
@@ -28,11 +28,11 @@ const GRAVITY := 1700.0
 const MAX_FALL_SPEED := 950.0
 const JUMP_IMPULSE := 520.0
 
-const ARM_LENGTH := BODY_HEIGHT * 0.58
-const ARM_THICKNESS := BODY_WIDTH * 0.19
-const LEG_THICKNESS := BODY_WIDTH * 0.19
-const THIGH_LENGTH := BODY_HEIGHT * 0.35
-const SHIN_LENGTH := BODY_HEIGHT * 0.32
+const ARM_LENGTH := BODY_HEIGHT * 0.62
+const ARM_THICKNESS := 4.0
+const LEG_THICKNESS := 4.5
+const THIGH_LENGTH := BODY_HEIGHT * 0.34
+const SHIN_LENGTH := BODY_HEIGHT * 0.31
 
 const ARM_SPRING := 25.0
 const ARM_DAMPING := 6.0
@@ -59,6 +59,7 @@ const FLOOR_Y := 572.0
 const GROUND_EPSILON := 5.0
 
 const MINT_GREEN := Color("#67e6bc")
+const MINT_LIMB := Color("#55d8ad")
 const MINT_DARK := Color("#48b995")
 
 var facing := 1.0
@@ -98,7 +99,7 @@ func build_ragdoll():
 	torso = make_capsule(
 		"Torso",
 		spawn_position + Vector2(0.0, 0.0),
-		BODY_WIDTH * 0.46,
+		BODY_WIDTH * 0.34,
 		BODY_HEIGHT - 4.0,
 		3.0
 	)
@@ -251,7 +252,8 @@ func make_capsule(
 	add_child(body)
 
 	var visual := SegmentVisual.new()
-	visual.setup(height - radius * 2.0, radius, MINT_GREEN)
+	var visual_color := MINT_GREEN if part_name == "Torso" else MINT_LIMB
+	visual.setup(height - radius * 2.0, radius, visual_color)
 	body.add_child(visual)
 
 	return body
@@ -398,7 +400,6 @@ func is_grounded() -> bool:
 		if part == null:
 			continue
 
-		var bottom: float = part.global_position.y
 		if part.global_position.y > FLOOR_Y - BODY_HEIGHT * 0.55:
 			return true
 
