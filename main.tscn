@@ -1,6 +1,343 @@
-[gd_scene format=3]
+[gd_scene load_steps=13 format=3]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[sub_resource type="PhysicsMaterial" id="PhysicsMaterial_player"]
+friction = 0.85
+bounce = 0.05
+
+[sub_resource type="RectangleShape2D" id="Shape_floor"]
+size = Vector2(1152, 48)
+
+[sub_resource type="RectangleShape2D" id="Shape_torso"]
+size = Vector2(18, 44)
+
+[sub_resource type="CircleShape2D" id="Shape_head"]
+radius = 12.0
+
+[sub_resource type="CapsuleShape2D" id="Shape_upper_arm"]
+radius = 4.0
+height = 28.0
+
+[sub_resource type="CapsuleShape2D" id="Shape_lower_arm"]
+radius = 4.0
+height = 26.0
+
+[sub_resource type="CapsuleShape2D" id="Shape_upper_leg"]
+radius = 4.5
+height = 32.0
+
+[sub_resource type="CapsuleShape2D" id="Shape_lower_leg"]
+radius = 4.5
+height = 34.0
+
+[sub_resource type="RectangleShape2D" id="Shape_platform"]
+size = Vector2(220, 18)
+
+[sub_resource type="RectangleShape2D" id="Shape_side_wall"]
+size = Vector2(24, 648)
+
+[sub_resource type="CircleShape2D" id="Shape_joint"]
+radius = 5.0
 
 [node name="Main" type="Node2D"]
-script = ExtResource("1_main")
+
+[node name="Background" type="ColorRect" parent="."]
+offset_right = 1152.0
+offset_bottom = 648.0
+mouse_filter = 2
+color = Color(0.07, 0.08, 0.1, 1)
+
+[node name="Arena" type="Node2D" parent="."]
+
+[node name="Floor" type="StaticBody2D" parent="Arena"]
+position = Vector2(576, 624)
+collision_layer = 1
+collision_mask = 2
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Arena/Floor"]
+shape = SubResource("Shape_floor")
+
+[node name="Visual" type="Polygon2D" parent="Arena/Floor"]
+polygon = PackedVector2Array(-576, -24, 576, -24, 576, 24, -576, 24)
+color = Color(0.18, 0.2, 0.24, 1)
+
+[node name="Platform" type="StaticBody2D" parent="Arena"]
+position = Vector2(760, 480)
+rotation = -0.04
+collision_layer = 1
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Arena/Platform"]
+shape = SubResource("Shape_platform")
+
+[node name="Visual" type="Polygon2D" parent="Arena/Platform"]
+polygon = PackedVector2Array(-110, -9, 110, -9, 110, 9, -110, 9)
+color = Color(0.24, 0.27, 0.31, 1)
+
+[node name="LeftWall" type="StaticBody2D" parent="Arena"]
+position = Vector2(12, 324)
+collision_layer = 1
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Arena/LeftWall"]
+shape = SubResource("Shape_side_wall")
+
+[node name="RightWall" type="StaticBody2D" parent="Arena"]
+position = Vector2(1140, 324)
+collision_layer = 1
+collision_mask = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Arena/RightWall"]
+shape = SubResource("Shape_side_wall")
+
+[node name="Player" type="Node2D" parent="."]
+position = Vector2(420, 430)
+
+[node name="Torso" type="RigidBody2D" parent="Player"]
+collision_layer = 2
+collision_mask = 1
+mass = 2.2
+linear_damp = 0.45
+angular_damp = 1.8
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/Torso"]
+shape = SubResource("Shape_torso")
+
+[node name="Visual" type="Polygon2D" parent="Player/Torso"]
+polygon = PackedVector2Array(-9, -22, 9, -22, 9, 22, -9, 22)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="Head" type="RigidBody2D" parent="Player"]
+position = Vector2(0, -35)
+collision_layer = 2
+collision_mask = 1
+mass = 0.8
+linear_damp = 0.35
+angular_damp = 1.6
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/Head"]
+shape = SubResource("Shape_head")
+
+[node name="Visual" type="Polygon2D" parent="Player/Head"]
+polygon = PackedVector2Array(0, -12, 4.59, -11.09, 8.49, -8.49, 11.09, -4.59, 12, 0, 11.09, 4.59, 8.49, 8.49, 4.59, 11.09, 0, 12, -4.59, 11.09, -8.49, 8.49, -11.09, 4.59, -12, 0, -11.09, -4.59, -8.49, -8.49, -4.59, -11.09)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="UpperArmL" type="RigidBody2D" parent="Player"]
+position = Vector2(-22, -2)
+rotation = -0.55
+collision_layer = 2
+collision_mask = 1
+mass = 0.45
+linear_damp = 0.3
+angular_damp = 1.0
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/UpperArmL"]
+shape = SubResource("Shape_upper_arm")
+
+[node name="Visual" type="Polygon2D" parent="Player/UpperArmL"]
+polygon = PackedVector2Array(-4, -14, 4, -14, 4, 14, -4, 14)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="LowerArmL" type="RigidBody2D" parent="Player"]
+position = Vector2(-42, 10)
+rotation = -0.55
+collision_layer = 2
+collision_mask = 1
+mass = 0.35
+linear_damp = 0.25
+angular_damp = 0.9
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/LowerArmL"]
+shape = SubResource("Shape_lower_arm")
+
+[node name="Visual" type="Polygon2D" parent="Player/LowerArmL"]
+polygon = PackedVector2Array(-4, -13, 4, -13, 4, 13, -4, 13)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="UpperArmR" type="RigidBody2D" parent="Player"]
+position = Vector2(22, -2)
+rotation = 0.55
+collision_layer = 2
+collision_mask = 1
+mass = 0.45
+linear_damp = 0.3
+angular_damp = 1.0
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/UpperArmR"]
+shape = SubResource("Shape_upper_arm")
+
+[node name="Visual" type="Polygon2D" parent="Player/UpperArmR"]
+polygon = PackedVector2Array(-4, -14, 4, -14, 4, 14, -4, 14)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="LowerArmR" type="RigidBody2D" parent="Player"]
+position = Vector2(42, 10)
+rotation = 0.55
+collision_layer = 2
+collision_mask = 1
+mass = 0.35
+linear_damp = 0.25
+angular_damp = 0.9
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/LowerArmR"]
+shape = SubResource("Shape_lower_arm")
+
+[node name="Visual" type="Polygon2D" parent="Player/LowerArmR"]
+polygon = PackedVector2Array(-4, -13, 4, -13, 4, 13, -4, 13)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="UpperLegL" type="RigidBody2D" parent="Player"]
+position = Vector2(-10, 31)
+rotation = -0.13
+collision_layer = 2
+collision_mask = 1
+mass = 0.75
+linear_damp = 0.35
+angular_damp = 1.2
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/UpperLegL"]
+shape = SubResource("Shape_upper_leg")
+
+[node name="Visual" type="Polygon2D" parent="Player/UpperLegL"]
+polygon = PackedVector2Array(-5, -16, 5, -16, 5, 16, -5, 16)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="LowerLegL" type="RigidBody2D" parent="Player"]
+position = Vector2(-13, 62)
+rotation = 0.06
+collision_layer = 2
+collision_mask = 1
+mass = 0.65
+linear_damp = 0.3
+angular_damp = 1.0
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/LowerLegL"]
+shape = SubResource("Shape_lower_leg")
+
+[node name="Visual" type="Polygon2D" parent="Player/LowerLegL"]
+polygon = PackedVector2Array(-5, -17, 5, -17, 5, 17, -5, 17)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="UpperLegR" type="RigidBody2D" parent="Player"]
+position = Vector2(10, 31)
+rotation = 0.13
+collision_layer = 2
+collision_mask = 1
+mass = 0.75
+linear_damp = 0.35
+angular_damp = 1.2
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/UpperLegR"]
+shape = SubResource("Shape_upper_leg")
+
+[node name="Visual" type="Polygon2D" parent="Player/UpperLegR"]
+polygon = PackedVector2Array(-5, -16, 5, -16, 5, 16, -5, 16)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="LowerLegR" type="RigidBody2D" parent="Player"]
+position = Vector2(13, 62)
+rotation = -0.06
+collision_layer = 2
+collision_mask = 1
+mass = 0.65
+linear_damp = 0.3
+angular_damp = 1.0
+can_sleep = false
+physics_material_override = SubResource("PhysicsMaterial_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player/LowerLegR"]
+shape = SubResource("Shape_lower_leg")
+
+[node name="Visual" type="Polygon2D" parent="Player/LowerLegR"]
+polygon = PackedVector2Array(-5, -17, 5, -17, 5, 17, -5, 17)
+color = Color(0.93, 0.94, 0.96, 1)
+
+[node name="NeckJoint" type="PinJoint2D" parent="Player"]
+position = Vector2(0, -23)
+node_a = NodePath("../Torso")
+node_b = NodePath("../Head")
+softness = 0.0
+
+[node name="ShoulderJointL" type="PinJoint2D" parent="Player"]
+position = Vector2(-9, -15)
+node_a = NodePath("../Torso")
+node_b = NodePath("../UpperArmL")
+softness = 0.0
+
+[node name="ElbowJointL" type="PinJoint2D" parent="Player"]
+position = Vector2(-35, 6)
+node_a = NodePath("../UpperArmL")
+node_b = NodePath("../LowerArmL")
+softness = 0.0
+
+[node name="ShoulderJointR" type="PinJoint2D" parent="Player"]
+position = Vector2(9, -15)
+node_a = NodePath("../Torso")
+node_b = NodePath("../UpperArmR")
+softness = 0.0
+
+[node name="ElbowJointR" type="PinJoint2D" parent="Player"]
+position = Vector2(35, 6)
+node_a = NodePath("../UpperArmR")
+node_b = NodePath("../LowerArmR")
+softness = 0.0
+
+[node name="HipJointL" type="PinJoint2D" parent="Player"]
+position = Vector2(-7, 22)
+node_a = NodePath("../Torso")
+node_b = NodePath("../UpperLegL")
+softness = 0.0
+
+[node name="KneeJointL" type="PinJoint2D" parent="Player"]
+position = Vector2(-11, 46)
+node_a = NodePath("../UpperLegL")
+node_b = NodePath("../LowerLegL")
+softness = 0.0
+
+[node name="HipJointR" type="PinJoint2D" parent="Player"]
+position = Vector2(7, 22)
+node_a = NodePath("../Torso")
+node_b = NodePath("../UpperLegR")
+softness = 0.0
+
+[node name="KneeJointR" type="PinJoint2D" parent="Player"]
+position = Vector2(11, 46)
+node_a = NodePath("../UpperLegR")
+node_b = NodePath("../LowerLegR")
+softness = 0.0
+
+[node name="StageLabel" type="Label" parent="."]
+offset_left = 24.0
+offset_top = 22.0
+offset_right = 580.0
+offset_bottom = 58.0
+theme_override_colors/font_color = Color(0.82, 0.84, 0.88, 1)
+theme_override_font_sizes/font_size = 22
+text = "SHADOW SWOP  •  PHYSICS FOUNDATION"
+
+[node name="HintLabel" type="Label" parent="."]
+offset_left = 26.0
+offset_top = 54.0
+offset_right = 700.0
+offset_bottom = 82.0
+theme_override_colors/font_color = Color(0.55, 0.58, 0.64, 1)
+theme_override_font_sizes/font_size = 14
+text = "Stage 1: connected rigid-body stickman test"
