@@ -29,11 +29,26 @@ const ATTACK_DURATION = 0.18
 const ATTACK_COOLDOWN = 0.26
 
 const MINT_GREEN = Color("#67e6bc")
-const SHOULDER_JOINT_RADIUS = 7.0
-const HIP_JOINT_RADIUS = 8.0
+
+# Spring-driven limb motion. These values make the limbs react to the
+# character's movement instead of following a fixed walking sine wave.
+const LIMB_SPRING = 32.0
+const LIMB_DAMPING = 8.5
+const FOOT_SPRING = 42.0
+const FOOT_DAMPING = 10.0
 
 var facing = 1.0
-var walking_phase = 0.0
+
+var left_hand_offset = Vector2(-22.0, -3.0)
+var right_hand_offset = Vector2(22.0, -3.0)
+var left_hand_velocity = Vector2.ZERO
+var right_hand_velocity = Vector2.ZERO
+
+var left_foot_offset = Vector2(-12.0, 49.0)
+var right_foot_offset = Vector2(12.0, 49.0)
+var left_foot_velocity = Vector2.ZERO
+var right_foot_velocity = Vector2.ZERO
+
 var attack_timer = 0.0
 var attack_cooldown = 0.0
 var jump_was_down = false
@@ -72,7 +87,7 @@ func build_collision():
 func _physics_process(delta):
 	read_input()
 	update_movement(delta)
-	update_animation(delta)
+	update_limb_physics(delta)
 
 	if attack_timer > 0.0:
 		attack_timer = maxf(attack_timer - delta, 0.0)
@@ -167,23 +182,108 @@ func start_attack():
 	attack_cooldown = ATTACK_COOLDOWN
 
 
-func update_animation(delta):
-	var speed_ratio = clampf(absf(velocity.x) / MOVE_SPEED, 0.0, 1.0)
+func update_limb_physics(delta):
+	# Horizontal movement creates inertial lag in the arms. There is no
+	# artificial arm swing cycle; the arms react to what the body is doing.
+	var velocity_ratio = clampf(
+		velocity.x / MOVE_SPEED,
+		-1.0,
+		1.0
+	)
 
-	if is_on_floor() and speed_ratio > 0.05:
-		# Faster movement produces a faster but still controlled gait.
-		walking_phase += delta * (5.5 + speed_ratio * 10.0)
+	var vertical_ratio = clampf(
+		velocity.y / JUMP_SPEED,
+		-1.0,
+		1.0
+	)
+
+	var arm_drag = velocity_ratio * 7.0
+	var arm_lift = clampf(-vertical_ratio * 4.0, -4.0, 4.0)
+
+	var left_hand_target = Vector2(
+		-22.0 - arm_drag,
+		-3.0 + arm_lift
+	)
+
+	var right_hand_target = Vector2(
+		22.0 - arm_drag,
+		-3.0 + arm_lift
+	)
+
+	var left_foot_target = Vector2(
+		-12.0 + velocity_ratio * 7.0,
+		49.0
+	)
+
+	var right_foot_target = Vector2(
+		12.0 + velocity_ratio * 7.0,
+		49.0
+	)
+
+	if not is_on_floor():
+		left_foot_target.y += 3.0
+		right_foot_target.y += 3.0
+
+	var left_hand_state = spring_vector(
+		left_hand_offset,
+		left_hand_velocity,
+		left_hand_target,
+		LIMB_SPRING,
+		LIMB_DAMPING,
+		delta
+	)
+	left_hand_offset = left_hand_state[0]
+	left_hand_velocity = left_hand_state[1]
+
+	var right_hand_state = spring_vector(
+		right_hand_offset,
+		right_hand_velocity,
+		right_hand_target,
+		LIMB_SPRING,
+		LIMB_DAMPING,
+		delta
+	)
+	right_hand_offset = right_hand_state[0]
+	right_hand_velocity = right_hand_state[1]
+
+	var left_foot_state = spring_vector(
+		left_foot_offset,
+		left_foot_velocity,
+		left_foot_target,
+		FOOT_SPRING,
+		FOOT_DAMPING,
+		delta
+	)
+	left_foot_offset = left_foot_state[0]
+	left_foot_velocity = left_foot_state[1]
+
+	var right_foot_state = spring_vector(
+		right_foot_offset,
+		right_foot_velocity,
+		right_foot_target,
+		FOOT_SPRING,
+		FOOT_DAMPING,
+		delta
+	)
+	right_foot_offset = right_foot_state[0]
+	right_foot_velocity = right_foot_state[1]
+
+
+func spring_vector(current, current_velocity, target, stiffness, damping, delta):
+	var acceleration = (target - current) * stiffness
+	acceleration -= current_velocity * damping
+
+	current_velocity += acceleration * delta
+	current += current_velocity * delta
+
+	return [current, current_velocity]
+
+
+func update_spring_state():
+	pass
 
 
 func get_point(name):
-	# One straight, continuous pill is used for each arm and each leg.
-	# Both shoulder pivots and both hip pivots stay on the body's centerline.
-	var stride = sin(walking_phase) * 10.0 * facing
-	var opposite_stride = -stride
-
-	var arm_swing = stride * 0.70
-	var opposite_arm_swing = -arm_swing
-
 	var attack_progress = 0.0
 
 	if attack_timer > 0.0:
@@ -209,10 +309,7 @@ func get_point(name):
 					-22.0
 				)
 
-			return Vector2(
-				-22.0 - arm_swing,
-				-3.0
-			)
+			return left_hand_offset
 
 		"hand_right":
 			if attack_timer > 0.0 and facing > 0.0:
@@ -221,10 +318,7 @@ func get_point(name):
 					-22.0
 				)
 
-			return Vector2(
-				22.0 + opposite_arm_swing,
-				-3.0
-			)
+			return right_hand_offset
 
 		"left_hip":
 			return Vector2(0.0, 16.0)
@@ -233,16 +327,10 @@ func get_point(name):
 			return Vector2(0.0, 16.0)
 
 		"left_foot":
-			return Vector2(
-				-12.0 + stride,
-				49.0
-			)
+			return left_foot_offset
 
 		"right_foot":
-			return Vector2(
-				12.0 + opposite_stride,
-				49.0
-			)
+			return right_foot_offset
 
 	return Vector2.ZERO
 
@@ -255,28 +343,13 @@ func _draw():
 	var shoulder_right = get_point("shoulder_right")
 	var hand_left = get_point("hand_left")
 	var hand_right = get_point("hand_right")
-
 	var left_hip = get_point("left_hip")
 	var right_hip = get_point("right_hip")
 	var left_foot = get_point("left_foot")
 	var right_foot = get_point("right_foot")
 
-	# Head.
-	draw_circle(
-		head,
-		14.0,
-		color
-	)
-
-	# Rounded solid torso.
-	draw_pill(
-		Vector2(0.0, -30.0),
-		Vector2(0.0, 16.0),
-		11.0,
-		color
-	)
-
-	# One continuous arm per side.
+	# Limbs are drawn first. The torso then covers their roots, preventing
+	# bumps or blobs at the shoulder and hip connections.
 	draw_pill(
 		shoulder_left,
 		hand_left,
@@ -291,7 +364,6 @@ func _draw():
 		color
 	)
 
-	# One continuous leg per side.
 	draw_pill(
 		left_hip,
 		left_foot,
@@ -306,28 +378,18 @@ func _draw():
 		color
 	)
 
-	# Rounded centers make the centered pivot points clean and continuous.
-	draw_circle(
-		shoulder_left,
-		8.0,
+	# Torso covers the upper ends of the limbs.
+	draw_pill(
+		Vector2(0.0, -30.0),
+		Vector2(0.0, 16.0),
+		11.0,
 		color
 	)
 
+	# Head.
 	draw_circle(
-		shoulder_right,
-		8.0,
-		color
-	)
-
-	draw_circle(
-		left_hip,
-		8.5,
-		color
-	)
-
-	draw_circle(
-		right_hip,
-		8.5,
+		head,
+		14.0,
 		color
 	)
 
