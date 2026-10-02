@@ -72,7 +72,23 @@ const WALK_LIFT = BODY_HEIGHT * 0.075
 const FOOT_SPRING = 48.0
 const FOOT_DAMPING = 8.0
 
+# Whole-body pose physics. The collision stays upright, but the visible
+# stick figure can lean, sway and settle like a loose body.
+const BODY_ANGULAR_SPRING = 18.0
+const BODY_ANGULAR_DAMPING = 3.2
+const BODY_MAX_ANGLE = deg_to_rad(16.0)
+const BODY_ACCEL_LEAN = 0.00055
+const BODY_SPEED_LEAN = 0.00085
+
+const BODY_BOB_SPRING = 20.0
+const BODY_BOB_DAMPING = 3.8
+const BODY_MAX_BOB = 5.0
+
 var facing = 1.0
+var body_angle = 0.0
+var body_angular_velocity = 0.0
+var body_bob = 0.0
+var body_bob_velocity = 0.0
 
 var left_hand_offset = Vector2.ZERO
 var right_hand_offset = Vector2.ZERO
@@ -258,6 +274,11 @@ func update_limb_physics(delta):
 		acceleration = (velocity - previous_velocity) / delta
 
 	previous_velocity = velocity
+
+	update_body_floppiness(
+		delta,
+		acceleration
+	)
 
 	# ==============================================================
 	# ARMS - physical hanging/swinging motion
@@ -465,6 +486,73 @@ func solve_leg(hip, ankle, bend_direction):
 	return candidate_b
 
 
+func update_body_floppiness(delta, acceleration):
+	# Forward acceleration tips the body backward; braking lets it swing
+	# forward and settle instead of snapping straight.
+	var target_angle = clampf(
+		-velocity.x * BODY_SPEED_LEAN -
+		acceleration.x * BODY_ACCEL_LEAN,
+		-BODY_MAX_ANGLE,
+		BODY_MAX_ANGLE
+	)
+
+	# Jumping and falling add a small amount of whole-body sway.
+	if not is_on_floor():
+		target_angle += clampf(
+			velocity.y * 0.00028,
+			-deg_to_rad(5.0),
+			deg_to_rad(5.0)
+		)
+
+	var angle_acceleration = (
+		target_angle - body_angle
+	) * BODY_ANGULAR_SPRING
+	angle_acceleration -= body_angular_velocity * BODY_ANGULAR_DAMPING
+
+	body_angular_velocity += angle_acceleration * delta
+	body_angle += body_angular_velocity * delta
+	body_angle = clampf(
+		body_angle,
+		-BODY_MAX_ANGLE * 1.15,
+		BODY_MAX_ANGLE * 1.15
+	)
+
+	# Soft vertical compression/extension makes the torso react to movement
+	# and landings instead of remaining visually rigid.
+	var target_bob = 0.0
+
+	if is_on_floor():
+		target_bob = clampf(
+			absf(velocity.x) * 0.012,
+			0.0,
+			BODY_MAX_BOB
+		)
+
+		if not previous_floor_state:
+			body_bob_velocity -= 26.0
+
+	var bob_acceleration = (
+		target_bob - body_bob
+	) * BODY_BOB_SPRING
+	bob_acceleration -= body_bob_velocity * BODY_BOB_DAMPING
+
+	body_bob_velocity += bob_acceleration * delta
+	body_bob += body_bob_velocity * delta
+	body_bob = clampf(
+		body_bob,
+		-BODY_MAX_BOB,
+		BODY_MAX_BOB
+	)
+
+
+func pose_point(point):
+	var pivot = Vector2(0.0, HIP_Y)
+	var relative = point - pivot
+	relative = relative.rotated(body_angle)
+
+	return pivot + relative + Vector2(0.0, body_bob)
+
+
 func spring_vector(current, current_velocity, target, stiffness, damping, delta):
 	var acceleration = (target - current) * stiffness
 	acceleration -= current_velocity * damping
@@ -495,49 +583,53 @@ func get_point(name):
 
 	match name:
 		"head":
-			return Vector2(0.0, HEAD_Y)
+			return pose_point(Vector2(0.0, HEAD_Y))
 
 		"shoulder_left":
-			return Vector2(0.0, SHOULDER_Y)
+			return pose_point(Vector2(0.0, SHOULDER_Y))
 
 		"shoulder_right":
-			return Vector2(0.0, SHOULDER_Y)
+			return pose_point(Vector2(0.0, SHOULDER_Y))
 
 		"hand_left":
 			if attack_timer > 0.0 and facing < 0.0:
-				return Vector2(
-					-ATTACK_REACH,
-					SHOULDER_Y + BODY_HEIGHT * 0.03
+				return pose_point(
+					Vector2(
+						-ATTACK_REACH,
+						SHOULDER_Y + BODY_HEIGHT * 0.03
+					)
 				)
 
-			return left_hand_offset
+			return pose_point(left_hand_offset)
 
 		"hand_right":
 			if attack_timer > 0.0 and facing > 0.0:
-				return Vector2(
-					ATTACK_REACH,
-					SHOULDER_Y + BODY_HEIGHT * 0.03
+				return pose_point(
+					Vector2(
+						ATTACK_REACH,
+						SHOULDER_Y + BODY_HEIGHT * 0.03
+					)
 				)
 
-			return right_hand_offset
+			return pose_point(right_hand_offset)
 
 		"left_hip":
-			return Vector2(0.0, HIP_Y)
+			return pose_point(Vector2(0.0, HIP_Y))
 
 		"right_hip":
-			return Vector2(0.0, HIP_Y)
+			return pose_point(Vector2(0.0, HIP_Y))
 
 		"left_knee":
-			return left_knee_offset
+			return pose_point(left_knee_offset)
 
 		"right_knee":
-			return right_knee_offset
+			return pose_point(right_knee_offset)
 
 		"left_ankle":
-			return left_ankle_offset
+			return pose_point(left_ankle_offset)
 
 		"right_ankle":
-			return right_ankle_offset
+			return pose_point(right_ankle_offset)
 
 	return Vector2.ZERO
 
@@ -606,8 +698,8 @@ func _draw():
 	# Legs end cleanly at the ankles. There are no separate feet.
 	# Short, narrow upright torso.
 	draw_pill(
-		Vector2(0.0, SHOULDER_Y - 3.0),
-		Vector2(0.0, HIP_Y),
+		pose_point(Vector2(0.0, SHOULDER_Y - 3.0)),
+		pose_point(Vector2(0.0, HIP_Y)),
 		BODY_WIDTH * 0.36,
 		color
 	)
