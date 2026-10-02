@@ -63,12 +63,21 @@ var ai_enabled = true
 var rng = RandomNumberGenerator.new()
 
 
-func setup(game, display_name, player_control, start_position, p_color, _p_accent):
+func setup(game, display_name, player_control, start_position, p_color, _p_accent, control_set = 1):
 	owner_game = game
 	fighter_name = display_name
 	is_player = player_control
 	base_color = p_color
 	global_position = start_position
+
+	if control_set == 2:
+		controls = {
+			"left": KEY_LEFT,
+			"right": KEY_RIGHT,
+			"jump": KEY_UP,
+			"punch": KEY_COMMA,
+			"kick": KEY_PERIOD
+		}
 
 	rng.randomize()
 
