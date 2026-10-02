@@ -65,6 +65,9 @@ func start_round():
 		Color("#b993ff")
 	)
 
+	# TEMPORARY: disable AI processing while player physics are tested.
+	ai.process_mode = Node.PROCESS_MODE_DISABLED
+
 	round_over = false
 	round_message.text = "FIGHT!"
 	center_message_time = 0.9
