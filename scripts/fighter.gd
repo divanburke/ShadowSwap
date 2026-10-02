@@ -30,12 +30,18 @@ const ATTACK_COOLDOWN = 0.26
 
 const MINT_GREEN = Color("#67e6bc")
 
-# Spring-driven limb motion. These values make the limbs react to the
-# character's movement instead of following a fixed walking sine wave.
-const LIMB_SPRING = 32.0
-const LIMB_DAMPING = 8.5
-const FOOT_SPRING = 42.0
-const FOOT_DAMPING = 10.0
+# Arms behave like lightweight masses hanging from the shoulders.
+# Walking acceleration, jumping and gravity all influence their motion.
+const ARM_SPRING = 24.0
+const ARM_DAMPING = 5.2
+const ARM_GRAVITY = 620.0
+
+# Feet use a gentle procedural gait because a simple two-foot walk cycle is
+# much more stable and readable than trying to balance physical leg bodies.
+const FOOT_SPRING = 50.0
+const FOOT_DAMPING = 8.5
+const WALK_STRIDE = 10.0
+const WALK_LIFT = 4.0
 
 var facing = 1.0
 
@@ -48,6 +54,10 @@ var left_foot_offset = Vector2(-12.0, 49.0)
 var right_foot_offset = Vector2(12.0, 49.0)
 var left_foot_velocity = Vector2.ZERO
 var right_foot_velocity = Vector2.ZERO
+
+var walking_phase = 0.0
+var previous_velocity = Vector2.ZERO
+var previous_floor_state = false
 
 var attack_timer = 0.0
 var attack_cooldown = 0.0
@@ -183,68 +193,129 @@ func start_attack():
 
 
 func update_limb_physics(delta):
-	# Horizontal movement creates inertial lag in the arms. There is no
-	# artificial arm swing cycle; the arms react to what the body is doing.
-	var velocity_ratio = clampf(
-		velocity.x / MOVE_SPEED,
-		-1.0,
+	var speed_ratio = clampf(
+		absf(velocity.x) / MOVE_SPEED,
+		0.0,
 		1.0
 	)
 
-	var vertical_ratio = clampf(
-		velocity.y / JUMP_SPEED,
-		-1.0,
-		1.0
+	var acceleration = Vector2.ZERO
+
+	if delta > 0.0:
+		acceleration = (velocity - previous_velocity) / delta
+
+	previous_velocity = velocity
+
+	# --------------------------------------------------------------
+	# ARMS: spring + gravity + real body acceleration.
+	# --------------------------------------------------------------
+	# The shoulders stay fixed. The hands are allowed to lag behind the
+	# body, fall under gravity, and swing when the body changes velocity.
+	var horizontal_inertia = clampf(
+		acceleration.x * 0.012,
+		-10.0,
+		10.0
 	)
 
-	var arm_drag = velocity_ratio * 7.0
-	var arm_lift = clampf(-vertical_ratio * 4.0, -4.0, 4.0)
-
-	var left_hand_target = Vector2(
-		-22.0 - arm_drag,
-		-3.0 + arm_lift
+	var vertical_inertia = clampf(
+		acceleration.y * 0.008,
+		-7.0,
+		7.0
 	)
 
-	var right_hand_target = Vector2(
-		22.0 - arm_drag,
-		-3.0 + arm_lift
+	var left_target = Vector2(
+		-22.0 - horizontal_inertia,
+		-3.0 + vertical_inertia
 	)
+
+	var right_target = Vector2(
+		22.0 - horizontal_inertia,
+		-3.0 + vertical_inertia
+	)
+
+	# Gravity makes the arms naturally drop while airborne instead of
+	# snapping to an animation pose.
+	left_hand_velocity.y += ARM_GRAVITY * delta
+	right_hand_velocity.y += ARM_GRAVITY * delta
+
+	# Jumping pushes both arms upward slightly, falling lets them trail down.
+	if not is_on_floor():
+		var air_angle = clampf(
+			velocity.y / JUMP_SPEED,
+			-1.0,
+			1.0
+		)
+
+		left_target.y += air_angle * 5.0
+		right_target.y += air_angle * 5.0
+
+	# A landing gives both arms a small physical swing.
+	if is_on_floor() and not previous_floor_state:
+		left_hand_velocity.y -= 100.0
+		right_hand_velocity.y -= 100.0
+
+	var left_arm_state = spring_vector(
+		left_hand_offset,
+		left_hand_velocity,
+		left_target,
+		ARM_SPRING,
+		ARM_DAMPING,
+		delta
+	)
+
+	left_hand_offset = left_arm_state[0]
+	left_hand_velocity = left_arm_state[1]
+
+	var right_arm_state = spring_vector(
+		right_hand_offset,
+		right_hand_velocity,
+		right_target,
+		ARM_SPRING,
+		ARM_DAMPING,
+		delta
+	)
+
+	right_hand_offset = right_arm_state[0]
+	right_hand_velocity = right_arm_state[1]
+
+	# --------------------------------------------------------------
+	# LEGS: simple human two-step walking gait.
+	# --------------------------------------------------------------
+	if is_on_floor() and speed_ratio > 0.05:
+		walking_phase += delta * (5.0 + speed_ratio * 10.0)
+	else:
+		walking_phase = move_toward(
+			walking_phase,
+			0.0,
+			delta * 2.5
+		)
+
+	var step_a = sin(walking_phase) * WALK_STRIDE
+	var step_b = sin(walking_phase + PI) * WALK_STRIDE
+
+	var lift_a = maxf(
+		sin(walking_phase),
+		0.0
+	) * WALK_LIFT
+
+	var lift_b = maxf(
+		sin(walking_phase + PI),
+		0.0
+	) * WALK_LIFT
 
 	var left_foot_target = Vector2(
-		-12.0 + velocity_ratio * 7.0,
-		49.0
+		-12.0 + step_a,
+		49.0 - lift_a
 	)
 
 	var right_foot_target = Vector2(
-		12.0 + velocity_ratio * 7.0,
-		49.0
+		12.0 + step_b,
+		49.0 - lift_b
 	)
 
 	if not is_on_floor():
-		left_foot_target.y += 3.0
-		right_foot_target.y += 3.0
-
-	var left_hand_state = spring_vector(
-		left_hand_offset,
-		left_hand_velocity,
-		left_hand_target,
-		LIMB_SPRING,
-		LIMB_DAMPING,
-		delta
-	)
-	left_hand_offset = left_hand_state[0]
-	left_hand_velocity = left_hand_state[1]
-
-	var right_hand_state = spring_vector(
-		right_hand_offset,
-		right_hand_velocity,
-		right_hand_target,
-		LIMB_SPRING,
-		LIMB_DAMPING,
-		delta
-	)
-	right_hand_offset = right_hand_state[0]
-	right_hand_velocity = right_hand_state[1]
+		left_foot_target.y += 4.0
+		right_foot_target.y += 4.0
 
 	var left_foot_state = spring_vector(
 		left_foot_offset,
@@ -254,6 +325,7 @@ func update_limb_physics(delta):
 		FOOT_DAMPING,
 		delta
 	)
+
 	left_foot_offset = left_foot_state[0]
 	left_foot_velocity = left_foot_state[1]
 
@@ -265,8 +337,11 @@ func update_limb_physics(delta):
 		FOOT_DAMPING,
 		delta
 	)
+
 	right_foot_offset = right_foot_state[0]
 	right_foot_velocity = right_foot_state[1]
+
+	previous_floor_state = is_on_floor()
 
 
 func spring_vector(current, current_velocity, target, stiffness, damping, delta):
@@ -277,10 +352,6 @@ func spring_vector(current, current_velocity, target, stiffness, damping, delta)
 	current += current_velocity * delta
 
 	return [current, current_velocity]
-
-
-func update_spring_state():
-	pass
 
 
 func get_point(name):
