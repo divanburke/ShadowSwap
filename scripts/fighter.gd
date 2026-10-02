@@ -1,495 +1,195 @@
-extends Node2D
+extends CharacterBody2D
 
-# ShadowSwap - physics-driven stick fighter controller.
+# ShadowSwap - simple one-player stick fighter foundation.
 #
-# The visible character is built from independent RigidBody2D segments joined
-# by PinJoint2D constraints. Movement is produced with forces and impulses;
-# pose is produced by torque drives. The torso is the main environmental
-# collider while the limbs remain physical and can pass through platforms.
+# The fighter uses a clean, upright stick-figure silhouette:
+#   - small round head
+#   - short narrow torso
+#   - long proportional arms
+#   - long two-bone legs
+#   - simple procedural walking
+#   - physics-driven limb motion
 #
-# This is an original Godot implementation inspired by the broad behavior of
-# physics/procedural stick-fighter games. It does not use their assets or code.
+# The design is inspired by the broad silhouette of classic stick-fighter
+# games without copying any proprietary character artwork.
 
-# -------------------------------------------------------------------------
-# Body proportions
-# -------------------------------------------------------------------------
+const BODY_WIDTH = 28.0
+const BODY_HEIGHT = 78.0
 
-const TORSO_WIDTH = 20.0
-const TORSO_HEIGHT = 54.0
-const HEAD_RADIUS = 10.5
+# Upright body layout.
+const HEAD_RADIUS = 11.0
+const HEAD_Y = -48.0
+const SHOULDER_Y = -25.0
+const HIP_Y = -8.0
 
-const SHOULDER_OFFSET = Vector2(0.0, -16.0)
-const HIP_OFFSET = Vector2(0.0, 8.0)
-const HEAD_OFFSET = Vector2(0.0, -39.0)
+const MOVE_SPEED = 320.0
+const GROUND_ACCELERATION = 2200.0
+const GROUND_DECELERATION = 2600.0
+const AIR_ACCELERATION = 900.0
+const AIR_DECELERATION = 420.0
 
-const UPPER_ARM_LENGTH = 22.0
-const FOREARM_LENGTH = 23.0
-const THIGH_LENGTH = 28.0
-const SHIN_LENGTH = 27.0
-
-const LIMB_WIDTH = 5.6
-
-# -------------------------------------------------------------------------
-# Movement
-# -------------------------------------------------------------------------
-
-# These values are tuned for a floaty, momentum-heavy controller rather than
-# a CharacterBody2D speed cap. Horizontal movement is force-driven.
-const MOVE_SPEED = 460.0
-const GROUND_ACCELERATION = 8.5
-const AIR_ACCELERATION = 4.3
-const GROUND_BRAKE = 7.0
-const AIR_BRAKE = 1.6
-const MAX_HORIZONTAL_SPEED = 760.0
-
-const GRAVITY_SCALE_NORMAL = 1.0
-const GRAVITY_SCALE_FAST_FALL = 1.65
-
-const JUMP_SPEED = 650.0
-const WALL_JUMP_HORIZONTAL_SPEED = 520.0
-const WALL_JUMP_VERTICAL_SPEED = 620.0
-const WALL_JUMP_REPEAT_DELAY = 0.12
-
-const WALL_CHECK_DISTANCE = 27.0
-
-# -------------------------------------------------------------------------
-# Active-ragdoll pose drive
-# -------------------------------------------------------------------------
-
-# Torque drives are intentionally softer in the air. This lets the body
-# flop, rotate and recover instead of behaving like a rigid animated sprite.
-const TORSO_GROUND_STRENGTH = 1100.0
-const TORSO_GROUND_DAMPING = 78.0
-const TORSO_AIR_STRENGTH = 240.0
-const TORSO_AIR_DAMPING = 18.0
-
-const LIMB_GROUND_STRENGTH = 86.0
-const LIMB_GROUND_DAMPING = 8.0
-const LIMB_AIR_STRENGTH = 44.0
-const LIMB_AIR_DAMPING = 4.5
-
-const HEAD_STRENGTH = 45.0
-const HEAD_DAMPING = 6.0
-
-const WALK_SWING = deg_to_rad(24.0)
-const WALK_CYCLE_SPEED = 7.0
-
-# The resting elbow stays bent. During an uppercut the forearm remains on
-# the opposite side of the upper arm at the same relative angle.
-const ELBOW_BEND = deg_to_rad(35.0)
+const GRAVITY = 1700.0
+const MAX_FALL_SPEED = 950.0
+const JUMP_SPEED = 590.0
 
 const ATTACK_DURATION = 0.30
 const ATTACK_COOLDOWN = 0.30
-const UPPERCUT_START_ANGLE = deg_to_rad(52.0)
-const UPPERCUT_END_ANGLE = deg_to_rad(-70.0)
-const UPPERCUT_TORQUE = 110.0
-const UPPERCUT_FOREARM_TORQUE = 75.0
-
-# -------------------------------------------------------------------------
-# Rendering
-# -------------------------------------------------------------------------
 
 const MINT_GREEN = Color("#67e6bc")
 
 # -------------------------------------------------------------------------
-# State
+# Arms
 # -------------------------------------------------------------------------
+# Arm length is tied directly to the body height. The hand position is
+# calculated from the shoulder, not from the torso center, so the arm keeps
+# the correct length while it swings.
+const ARM_LENGTH = BODY_HEIGHT * 0.53
+const UPPER_ARM_LENGTH = ARM_LENGTH * 0.52
+const FOREARM_LENGTH = ARM_LENGTH * 0.48
+const ARM_THICKNESS = BODY_WIDTH * 0.19
+const ARM_REST_VECTOR = Vector2(-0.7220, 0.6919)
+const ATTACK_REACH = ARM_LENGTH * 1.15
+const UPPERCUT_ELBOW_ANGLE = deg_to_rad(35.0)
 
-var parts: Dictionary = {}
+const ARM_SPRING = 16.0
+const ARM_DAMPING = 3.7
+const ARM_GRAVITY = 680.0
 
-var spawn_position = Vector2.ZERO
+# -------------------------------------------------------------------------
+# Legs
+# -------------------------------------------------------------------------
+# Each leg is a real visual two-bone chain:
+#       hip -> knee -> ankle -> foot
+#
+# The longer legs and short torso make the character stand upright rather
+# than looking like a squat/crouched stick figure.
+const THIGH_LENGTH = BODY_HEIGHT * 0.35
+const SHIN_LENGTH = BODY_HEIGHT * 0.32
+const LEG_THICKNESS = BODY_WIDTH * 0.19
+
+const ANKLE_BASE_X = BODY_WIDTH * 0.34
+const ANKLE_BASE_Y = BODY_HEIGHT * 0.53
+const WALK_STRIDE = BODY_HEIGHT * 0.18
+const WALK_LIFT = BODY_HEIGHT * 0.11
+const WALK_CYCLE_SPEED = 4.0
+
+const PLANTED_FOOT_SPRING = 72.0
+const PLANTED_FOOT_DAMPING = 11.0
+const SWING_FOOT_SPRING = 48.0
+const SWING_FOOT_DAMPING = 7.5
+
+# The visible ankle has a small clearance above the collision floor so the
+# floppy pose cannot visually sink through the platform.
+const GROUND_RENDER_Y = BODY_HEIGHT * 0.49
+const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
+
+# Whole-body pose physics. The collision stays upright, but the visible
+# stick figure can lean, sway and settle like a loose body.
+const BODY_ANGULAR_SPRING = 18.0
+const BODY_ANGULAR_DAMPING = 3.2
+const BODY_MAX_ANGLE = deg_to_rad(16.0)
+const BODY_ACCEL_LEAN = 0.00055
+const BODY_SPEED_LEAN = 0.00085
+
+const BODY_BOB_SPRING = 20.0
+const BODY_BOB_DAMPING = 3.8
+const BODY_MAX_BOB = 5.0
+
 var facing = 1.0
+var body_angle = 0.0
+var body_angular_velocity = 0.0
+var body_bob = 0.0
+var body_bob_velocity = 0.0
 
-var grounded = false
-var wall_side = 0.0
+var left_hand_offset = Vector2.ZERO
+var right_hand_offset = Vector2.ZERO
+var left_hand_velocity = Vector2.ZERO
+var right_hand_velocity = Vector2.ZERO
+var left_elbow_offset = Vector2.ZERO
+var right_elbow_offset = Vector2.ZERO
 
-var walk_phase = 0.0
+var left_ankle_offset = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
+var right_ankle_offset = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
+var left_ankle_velocity = Vector2.ZERO
+var right_ankle_velocity = Vector2.ZERO
 
-var jump_was_down = false
-var jump_consumed = false
-var wall_jump_timer = 0.0
+var left_knee_offset = Vector2.ZERO
+var right_knee_offset = Vector2.ZERO
 
-var crouching = false
+var walking_phase = 0.0
+var previous_velocity = Vector2.ZERO
+var previous_floor_state = false
 
 var attack_timer = 0.0
 var attack_cooldown = 0.0
+var jump_was_down = false
 
 
 func setup(start_position):
-	spawn_position = start_position
+	global_position = start_position
 
-	# Keep the controller node fixed at the world origin. The actual physics
-	# pieces own their world-space motion so a moving parent never overrides
-	# RigidBody2D transforms.
-	position = Vector2.ZERO
+	collision_layer = 2
+	collision_mask = 3
 
-	build_ragdoll(start_position)
+	motion_mode = CharacterBody2D.MOTION_MODE_GROUNDED
+	floor_stop_on_slope = true
+	floor_snap_length = 8.0
+	floor_max_angle = deg_to_rad(50.0)
+	safe_margin = 0.08
+
+	build_collision()
+	reset_limb_positions()
 	queue_redraw()
 
 
-func build_ragdoll(start_position):
-	# Clean rebuild protection.
-	for child in get_children():
-		child.queue_free()
-
-	parts.clear()
-
-	var material = PhysicsMaterial.new()
-	material.friction = 0.8
-	material.bounce = 0.0
-
-	# Main collision body. Only this and the head collide with the level.
-	var torso_position = start_position
-
-	var torso = create_capsule(
-		"Torso",
-		TORSO_HEIGHT,
-		TORSO_WIDTH,
-		3.2,
-		torso_position,
-		0.0,
-		true,
-		material
-	)
-
-	torso.angular_damp = 2.0
-	torso.continuous_cd = RigidBody2D.CCD_MODE_CAST_RAY
-
-	var head = create_circle(
-		"Head",
-		HEAD_RADIUS,
-		0.75,
-		start_position + HEAD_OFFSET,
-		true,
-		material
-	)
-
-	# Limbs are real rigid bodies with inertia, but do not collide with the
-	# level. This keeps them floppy instead of letting toes snag on platforms.
-	var shoulder = torso_position + SHOULDER_OFFSET
-	var hip = torso_position + HIP_OFFSET
-
-	var right_upper_dir = Vector2.RIGHT.rotated(deg_to_rad(54.0))
-	var left_upper_dir = Vector2.RIGHT.rotated(deg_to_rad(126.0))
-
-	var right_elbow = shoulder + right_upper_dir * UPPER_ARM_LENGTH
-	var left_elbow = shoulder + left_upper_dir * UPPER_ARM_LENGTH
-
-	var right_forearm_dir = right_upper_dir.rotated(ELBOW_BEND)
-	var left_forearm_dir = left_upper_dir.rotated(-ELBOW_BEND)
-
-	var right_hand = right_elbow + right_forearm_dir * FOREARM_LENGTH
-	var left_hand = left_elbow + left_forearm_dir * FOREARM_LENGTH
-
-	var right_upper = create_segment(
-		"RightUpperArm",
-		UPPER_ARM_LENGTH,
-		LIMB_WIDTH,
-		0.45,
-		midpoint(shoulder, right_elbow),
-		right_upper_dir.angle(),
-		material
-	)
-
-	var left_upper = create_segment(
-		"LeftUpperArm",
-		UPPER_ARM_LENGTH,
-		LIMB_WIDTH,
-		0.45,
-		midpoint(shoulder, left_elbow),
-		left_upper_dir.angle(),
-		material
-	)
-
-	var right_forearm = create_segment(
-		"RightForearm",
-		FOREARM_LENGTH,
-		LIMB_WIDTH,
-		0.40,
-		midpoint(right_elbow, right_hand),
-		right_forearm_dir.angle(),
-		material
-	)
-
-	var left_forearm = create_segment(
-		"LeftForearm",
-		FOREARM_LENGTH,
-		LIMB_WIDTH,
-		0.40,
-		midpoint(left_elbow, left_hand),
-		left_forearm_dir.angle(),
-		material
-	)
-
-	var right_ankle = hip + Vector2(13.0, 35.0)
-	var left_ankle = hip + Vector2(-13.0, 35.0)
-
-	var right_knee = solve_initial_leg_joint(
-		hip,
-		right_ankle,
-		1.0
-	)
-
-	var left_knee = solve_initial_leg_joint(
-		hip,
-		left_ankle,
-		-1.0
-	)
-
-	var right_thigh_dir = (right_knee - hip).normalized()
-	var left_thigh_dir = (left_knee - hip).normalized()
-
-	var right_shin_dir = (right_ankle - right_knee).normalized()
-	var left_shin_dir = (left_ankle - left_knee).normalized()
-
-	var right_thigh = create_segment(
-		"RightThigh",
-		THIGH_LENGTH,
-		LIMB_WIDTH,
-		0.70,
-		midpoint(hip, right_knee),
-		right_thigh_dir.angle(),
-		material
-	)
-
-	var left_thigh = create_segment(
-		"LeftThigh",
-		THIGH_LENGTH,
-		LIMB_WIDTH,
-		0.70,
-		midpoint(hip, left_knee),
-		left_thigh_dir.angle(),
-		material
-	)
-
-	var right_shin = create_segment(
-		"RightShin",
-		SHIN_LENGTH,
-		LIMB_WIDTH,
-		0.55,
-		midpoint(right_knee, right_ankle),
-		right_shin_dir.angle(),
-		material
-	)
-
-	var left_shin = create_segment(
-		"LeftShin",
-		SHIN_LENGTH,
-		LIMB_WIDTH,
-		0.55,
-		midpoint(left_knee, left_ankle),
-		left_shin_dir.angle(),
-		material
-	)
-
-	# Legs interact with the floor so the feet cannot simply pass through it.
-	for key in [
-		"RightThigh",
-		"LeftThigh",
-		"RightShin",
-		"LeftShin"
-	]:
-		parts[key].collision_layer = 2
-		parts[key].collision_mask = 1
-
-	for key in ["RightShin", "LeftShin"]:
-		parts[key].continuous_cd = RigidBody2D.CCD_MODE_CAST_SHAPE
-
-	# Add joints after all bodies exist so their paths are valid.
-	make_pin_joint(
-		torso,
-		head,
-		torso_position + Vector2(0.0, -TORSO_HEIGHT * 0.5 + 2.0),
-		0.0
-	)
-
-	make_pin_joint(torso, right_upper, shoulder, 0.0)
-	make_pin_joint(torso, left_upper, shoulder, 0.0)
-
-	make_pin_joint(right_upper, right_forearm, right_elbow, 0.0)
-	make_pin_joint(left_upper, left_forearm, left_elbow, 0.0)
-
-	make_pin_joint(torso, right_thigh, hip, 0.0)
-	make_pin_joint(torso, left_thigh, hip, 0.0)
-
-	make_pin_joint(right_thigh, right_shin, right_knee, 0.0)
-	make_pin_joint(left_thigh, left_shin, left_knee, 0.0)
-
-	# Store endpoint geometry for rendering.
-	parts["RightArmShoulder"] = shoulder
-	parts["LeftArmShoulder"] = shoulder
-	parts["RightArmElbow"] = right_elbow
-	parts["LeftArmElbow"] = left_elbow
-	parts["RightHandRest"] = right_hand
-	parts["LeftHandRest"] = left_hand
-
-	# Keep the limbs awake. Sleeping can make active ragdolls feel sticky.
-	for key in [
-		"Torso",
-		"Head",
-		"RightUpperArm",
-		"LeftUpperArm",
-		"RightForearm",
-		"LeftForearm",
-		"RightThigh",
-		"LeftThigh",
-		"RightShin",
-		"LeftShin"
-	]:
-		var body = parts[key]
-		body.can_sleep = false
-
-	# The torso is the main contact sensor for floor/wall movement.
-	torso.contact_monitor = true
-	torso.max_contacts_reported = 8
-
-	# Force one initial wake after all joints are connected.
-	for key in parts:
-		if parts[key] is RigidBody2D:
-			parts[key].sleeping = false
-
-
-func create_capsule(
-	node_name,
-	height,
-	width,
-	mass,
-	world_position,
-	world_angle,
-	collides_with_level,
-	material
-):
-	var body = RigidBody2D.new()
-	body.name = node_name
-	body.mass = mass
-	body.gravity_scale = GRAVITY_SCALE_NORMAL
-	body.linear_damp = 0.05
-	body.angular_damp = 0.7
-	body.position = world_position
-	body.rotation = world_angle
-
-	if collides_with_level:
-		body.collision_layer = 2
-		body.collision_mask = 1
-	else:
-		body.collision_layer = 0
-		body.collision_mask = 0
-
-	body.physics_material_override = material
-
+func build_collision():
 	var collision = CollisionShape2D.new()
-	var shape = CapsuleShape2D.new()
-	shape.radius = width * 0.5
-	shape.height = height
-	collision.shape = shape
+	collision.name = "BodyCollision"
 
-	body.add_child(collision)
-	add_child(body)
+	var capsule = CapsuleShape2D.new()
+	capsule.radius = BODY_WIDTH * 0.5
+	capsule.height = BODY_HEIGHT
 
-	parts[node_name] = body
-	return body
+	collision.shape = capsule
+	collision.position = Vector2(0.0, 2.0)
 
-
-func create_circle(
-	node_name,
-	radius,
-	mass,
-	world_position,
-	collides_with_level,
-	material
-):
-	var body = RigidBody2D.new()
-	body.name = node_name
-	body.mass = mass
-	body.gravity_scale = GRAVITY_SCALE_NORMAL
-	body.linear_damp = 0.05
-	body.angular_damp = 0.7
-	body.position = world_position
-
-	if collides_with_level:
-		body.collision_layer = 2
-		body.collision_mask = 1
-	else:
-		body.collision_layer = 0
-		body.collision_mask = 0
-
-	body.physics_material_override = material
-
-	var collision = CollisionShape2D.new()
-	var shape = CircleShape2D.new()
-	shape.radius = radius
-	collision.shape = shape
-
-	body.add_child(collision)
-	add_child(body)
-
-	parts[node_name] = body
-	return body
+	add_child(collision)
 
 
-func create_segment(
-	node_name,
-	length,
-	width,
-	mass,
-	world_position,
-	world_angle,
-	material
-):
-	var body = RigidBody2D.new()
-	body.name = node_name
-	body.mass = mass
-	body.gravity_scale = GRAVITY_SCALE_NORMAL
-	body.linear_damp = 0.02
-	body.angular_damp = 0.45
-	body.position = world_position
-	body.rotation = world_angle
-	body.collision_layer = 0
-	body.collision_mask = 0
-	body.physics_material_override = material
+func reset_limb_positions():
+	var left_rest = Vector2(
+		ARM_REST_VECTOR.x * ARM_LENGTH,
+		ARM_REST_VECTOR.y * ARM_LENGTH
+	)
 
-	var collision = CollisionShape2D.new()
-	var shape = CapsuleShape2D.new()
-	shape.radius = width * 0.5
-	shape.height = length
-	collision.shape = shape
-	# CapsuleShape2D is vertical by default; rotate the local shape so its
-	# long axis follows body.rotation, which stores the segment's world angle.
-	collision.rotation = -PI * 0.5
+	var right_rest = Vector2(
+		-ARM_REST_VECTOR.x * ARM_LENGTH,
+		ARM_REST_VECTOR.y * ARM_LENGTH
+	)
 
-	body.add_child(collision)
-	add_child(body)
+	left_hand_offset = Vector2(0.0, SHOULDER_Y) + left_rest
+	right_hand_offset = Vector2(0.0, SHOULDER_Y) + right_rest
 
-	parts[node_name] = body
-	return body
+	left_hand_velocity = Vector2.ZERO
+	right_hand_velocity = Vector2.ZERO
 
+	left_elbow_offset = Vector2(0.0, SHOULDER_Y) + left_rest.normalized() * UPPER_ARM_LENGTH
+	right_elbow_offset = Vector2(0.0, SHOULDER_Y) + right_rest.normalized() * UPPER_ARM_LENGTH
 
-func make_pin_joint(body_a, body_b, world_position, joint_softness):
-	var joint = PinJoint2D.new()
-	joint.global_position = world_position
-	add_child(joint)
-
-	# All physics pieces are siblings under this controller. Resolve paths
-	# from the joint itself so the constraint always points at the intended
-	# bodies.
-	joint.node_a = joint.get_path_to(body_a)
-	joint.node_b = joint.get_path_to(body_b)
-	joint.softness = joint_softness
-	joint.disable_collision = true
+	left_knee_offset = Vector2(-3.0, HIP_Y + THIGH_LENGTH)
+	right_knee_offset = Vector2(3.0, HIP_Y + THIGH_LENGTH)
 
 
 func _physics_process(delta):
-	if not parts.has("Torso"):
-		return
-
 	read_input()
-	update_environment_state()
 	update_movement(delta)
-	update_pose_drive(delta)
-	update_attack_timers(delta)
+	update_limb_physics(delta)
 
-	if parts["Torso"].global_position.y > 1000.0:
-		respawn()
+	if attack_timer > 0.0:
+		attack_timer = maxf(attack_timer - delta, 0.0)
+
+	if attack_cooldown > 0.0:
+		attack_cooldown = maxf(attack_cooldown - delta, 0.0)
 
 	queue_redraw()
 
@@ -504,6 +204,8 @@ func read_input():
 		move_direction += 1.0
 
 	if move_direction != 0.0:
+		# Facing changes only from movement. Attacks use the last walked
+		# direction, matching a simple directional stick-fighter controller.
 		facing = move_direction
 
 	var jump_down = Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)
@@ -511,333 +213,63 @@ func read_input():
 	if jump_down and not jump_was_down:
 		try_jump()
 
-	jump_was_down = jump_down
-
-	crouching = Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)
+	if not jump_down and jump_was_down and velocity.y < -180.0:
+		velocity.y *= 0.48
 
 	if Input.is_key_pressed(KEY_J) and attack_cooldown <= 0.0:
 		start_attack()
 
-
-func update_environment_state():
-	grounded = detect_grounded()
-	wall_side = detect_wall_side()
-
-	if grounded:
-		jump_consumed = false
+	jump_was_down = jump_down
 
 
 func update_movement(delta):
-	var torso = parts["Torso"]
+	var move_direction = 0.0
 
-	var desired_speed = 0.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		move_direction -= 1.0
 
-	if not crouching:
-		desired_speed = facing * MOVE_SPEED
-	elif grounded:
-		desired_speed = facing * MOVE_SPEED * 0.45
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		move_direction += 1.0
 
-	var acceleration = GROUND_ACCELERATION if grounded else AIR_ACCELERATION
-	var braking = GROUND_BRAKE if grounded else AIR_BRAKE
+	var on_floor = is_on_floor()
 
-	if absf(desired_speed) > 0.0:
-		var velocity_error = desired_speed - torso.linear_velocity.x
-		var force = velocity_error * torso.mass * acceleration
-		torso.apply_central_force(Vector2(force, 0.0))
+	if move_direction != 0.0:
+		var acceleration = GROUND_ACCELERATION
+
+		if not on_floor:
+			acceleration = AIR_ACCELERATION
+
+		velocity.x = move_toward(
+			velocity.x,
+			move_direction * MOVE_SPEED,
+			acceleration * delta
+		)
 	else:
-		var braking_force = -torso.linear_velocity.x * torso.mass * braking
-		torso.apply_central_force(Vector2(braking_force, 0.0))
+		var deceleration = GROUND_DECELERATION
 
-	# Avoid an artificial hard speed cap. Instead, smoothly push back when
-	# momentum gets excessive, preserving the game's loose physics feel.
-	if absf(torso.linear_velocity.x) > MAX_HORIZONTAL_SPEED:
-		var excess = absf(torso.linear_velocity.x) - MAX_HORIZONTAL_SPEED
-		var correction = sign(torso.linear_velocity.x) * excess * torso.mass * 3.0
-		torso.apply_central_force(Vector2(-correction, 0.0))
+		if not on_floor:
+			deceleration = AIR_DECELERATION
 
-	# Fast fall is an additional force instead of a direct velocity change.
-	var desired_gravity = GRAVITY_SCALE_FAST_FALL if crouching else GRAVITY_SCALE_NORMAL
-	for key in parts:
-		var body = parts[key]
-		if body is RigidBody2D:
-			body.gravity_scale = desired_gravity
+		velocity.x = move_toward(
+			velocity.x,
+			0.0,
+			deceleration * delta
+		)
+
+	if not on_floor:
+		velocity.y += GRAVITY * delta
+
+	velocity.y = minf(velocity.y, MAX_FALL_SPEED)
+
+	move_and_slide()
+
+	if is_on_floor() and absf(velocity.x) < 2.0:
+		velocity.x = 0.0
 
 
 func try_jump():
-	if grounded:
-		apply_character_velocity_change(Vector2(0.0, -JUMP_SPEED))
-		return
-
-	if wall_side != 0.0 and wall_jump_timer <= 0.0:
-		var wall_jump_velocity = Vector2(
-			-wall_side * WALL_JUMP_HORIZONTAL_SPEED,
-			-WALL_JUMP_VERTICAL_SPEED
-		)
-		apply_character_velocity_change(wall_jump_velocity)
-		wall_jump_timer = WALL_JUMP_REPEAT_DELAY
-
-
-func apply_character_velocity_change(delta_velocity):
-	for key in parts:
-		var body = parts[key]
-
-		if body is RigidBody2D:
-			body.apply_central_impulse(
-				delta_velocity * body.mass
-			)
-			body.sleeping = false
-
-
-func detect_grounded():
-	var torso = parts["Torso"]
-
-	# The torso is above the floor when standing, so the old short ray never
-	# reached the platform. Start near the bottom of the torso and cast beyond
-	# the floor contact point.
-	var origin = torso.global_position + Vector2(
-		0.0,
-		TORSO_HEIGHT * 0.45
-	)
-	var target = origin + Vector2(0.0, 28.0)
-
-	var result = raycast(origin, target)
-
-	return not result.is_empty()
-
-
-func detect_wall_side():
-	var torso = parts["Torso"]
-	var origin = torso.global_position
-
-	var left_result = raycast(
-		origin,
-		origin + Vector2(-WALL_CHECK_DISTANCE, 0.0)
-	)
-
-	if not left_result.is_empty():
-		return -1.0
-
-	var right_result = raycast(
-		origin,
-		origin + Vector2(WALL_CHECK_DISTANCE, 0.0)
-	)
-
-	if not right_result.is_empty():
-		return 1.0
-
-	return 0.0
-
-
-func raycast(origin, target):
-	var query = PhysicsRayQueryParameters2D.create(
-		origin,
-		target
-	)
-
-	query.collision_mask = 1
-	query.collide_with_bodies = true
-	query.exclude = get_all_body_rids()
-
-	return get_world_2d().direct_space_state.intersect_ray(query)
-
-
-func get_all_body_rids():
-	var exclusions = []
-
-	for key in parts:
-		var body = parts[key]
-
-		if body is RigidBody2D:
-			exclusions.append(body.get_rid())
-
-	return exclusions
-
-
-func update_pose_drive(delta):
-	var torso = parts["Torso"]
-	var speed_ratio = clampf(
-		absf(torso.linear_velocity.x) / MOVE_SPEED,
-		0.0,
-		1.0
-	)
-
-	var ground_strength = TORSO_GROUND_STRENGTH if grounded else TORSO_AIR_STRENGTH
-	var ground_damping = TORSO_GROUND_DAMPING if grounded else TORSO_AIR_DAMPING
-
-	# The torso follows the movement without becoming perfectly upright.
-	var target_body_angle = -torso.linear_velocity.x * 0.00055
-
-	if not grounded:
-		target_body_angle += torso.linear_velocity.y * 0.00012
-
-	target_body_angle = clampf(
-		target_body_angle,
-		deg_to_rad(-12.0),
-		deg_to_rad(12.0)
-	)
-
-	drive_angle(
-		torso,
-		target_body_angle,
-		ground_strength,
-		ground_damping
-	)
-
-	# Head follows the torso with a softer drive.
-	drive_angle(
-		parts["Head"],
-		torso.rotation,
-		HEAD_STRENGTH,
-		HEAD_DAMPING
-	)
-
-	if grounded and speed_ratio > 0.05:
-		walk_phase = fmod(
-			walk_phase + delta * (WALK_CYCLE_SPEED + speed_ratio * 4.0),
-			TAU
-		)
-	else:
-		walk_phase = move_toward(
-			walk_phase,
-			0.0,
-			delta * 6.0
-		)
-
-	var walk_wave = sin(walk_phase) * WALK_SWING * speed_ratio
-
-	var right_upper_target = torso.rotation + deg_to_rad(54.0) - walk_wave
-	var left_upper_target = torso.rotation + deg_to_rad(126.0) + walk_wave
-
-	var right_forearm_target = right_upper_target + ELBOW_BEND
-	var left_forearm_target = left_upper_target - ELBOW_BEND
-
-	var right_thigh_target = torso.rotation + deg_to_rad(76.0) + walk_wave * 1.15
-	var left_thigh_target = torso.rotation + deg_to_rad(104.0) - walk_wave * 1.15
-
-	var right_shin_target = torso.rotation + deg_to_rad(105.0) - walk_wave * 1.55
-	var left_shin_target = torso.rotation + deg_to_rad(75.0) + walk_wave * 1.55
-
-	if crouching and grounded:
-		right_thigh_target += deg_to_rad(15.0)
-		left_thigh_target -= deg_to_rad(15.0)
-		right_shin_target -= deg_to_rad(20.0)
-		left_shin_target += deg_to_rad(20.0)
-
-	# Active uppercut: only the facing arm is pulled through the attack arc.
-	if attack_timer > 0.0:
-		var attack_progress = 1.0 - attack_timer / ATTACK_DURATION
-		attack_progress = clampf(attack_progress, 0.0, 1.0)
-		attack_progress = smoothstep(0.0, 1.0, attack_progress)
-
-		var attacking_upper_angle = lerpf(
-			UPPERCUT_START_ANGLE,
-			UPPERCUT_END_ANGLE,
-			attack_progress
-		)
-
-		if facing > 0.0:
-			right_upper_target = torso.rotation + attacking_upper_angle
-			right_forearm_target = right_upper_target + ELBOW_BEND
-		else:
-			left_upper_target = torso.rotation + PI - attacking_upper_angle
-			left_forearm_target = left_upper_target - ELBOW_BEND
-
-	var limb_strength = LIMB_GROUND_STRENGTH if grounded else LIMB_AIR_STRENGTH
-	var limb_damping = LIMB_GROUND_DAMPING if grounded else LIMB_AIR_DAMPING
-
-	drive_angle(
-		parts["RightUpperArm"],
-		right_upper_target,
-		UPPERCUT_TORQUE if attack_timer > 0.0 and facing > 0.0 else limb_strength,
-		limb_damping
-	)
-
-	drive_angle(
-		parts["LeftUpperArm"],
-		left_upper_target,
-		UPPERCUT_TORQUE if attack_timer > 0.0 and facing < 0.0 else limb_strength,
-		limb_damping
-	)
-
-	drive_angle(
-		parts["RightForearm"],
-		right_forearm_target,
-		UPPERCUT_FOREARM_TORQUE if attack_timer > 0.0 and facing > 0.0 else limb_strength,
-		limb_damping
-	)
-
-	drive_angle(
-		parts["LeftForearm"],
-		left_forearm_target,
-		UPPERCUT_FOREARM_TORQUE if attack_timer > 0.0 and facing < 0.0 else limb_strength,
-		limb_damping
-	)
-
-	drive_angle(
-		parts["RightThigh"],
-		right_thigh_target,
-		limb_strength,
-		limb_damping
-	)
-
-	drive_angle(
-		parts["LeftThigh"],
-		left_thigh_target,
-		limb_strength,
-		limb_damping
-	)
-
-	drive_angle(
-		parts["RightShin"],
-		right_shin_target,
-		limb_strength,
-		limb_damping
-	)
-
-	drive_angle(
-		parts["LeftShin"],
-		left_shin_target,
-		limb_strength,
-		limb_damping
-	)
-
-	if attack_timer <= 0.0:
-		wall_jump_timer = maxf(
-			wall_jump_timer - delta,
-			0.0
-		)
-	else:
-		wall_jump_timer = maxf(
-			wall_jump_timer - delta,
-			0.0
-		)
-
-
-func drive_angle(body, target_angle, strength, damping):
-	var angle_error = wrapf(
-		target_angle - body.rotation,
-		-PI,
-		PI
-	)
-
-	var torque = angle_error * strength
-	torque -= body.angular_velocity * damping
-
-	body.apply_torque(torque)
-
-
-func update_attack_timers(delta):
-	if attack_timer > 0.0:
-		attack_timer = maxf(
-			attack_timer - delta,
-			0.0
-		)
-
-	if attack_cooldown > 0.0:
-		attack_cooldown = maxf(
-			attack_cooldown - delta,
-			0.0
-		)
+	if is_on_floor():
+		velocity.y = -JUMP_SPEED
 
 
 func start_attack():
@@ -845,54 +277,421 @@ func start_attack():
 	attack_cooldown = ATTACK_COOLDOWN
 
 
-func respawn():
-	for key in parts:
-		var body = parts[key]
+func update_limb_physics(delta):
+	var speed_ratio = clampf(
+		absf(velocity.x) / MOVE_SPEED,
+		0.0,
+		1.0
+	)
 
-		if body is RigidBody2D:
-			body.freeze = true
+	var acceleration = Vector2.ZERO
 
-	await get_tree().physics_frame
+	if delta > 0.0:
+		acceleration = (velocity - previous_velocity) / delta
 
-	build_ragdoll(spawn_position)
-	queue_redraw()
+	previous_velocity = velocity
+
+	update_body_floppiness(
+		delta,
+		acceleration
+	)
+
+	# ==============================================================
+	# ARMS - physical hanging/swinging motion
+	# ==============================================================
+	var shoulder = Vector2(0.0, SHOULDER_Y)
+
+	var horizontal_inertia = clampf(
+		acceleration.x * 0.012,
+		-10.0,
+		10.0
+	)
+
+	var vertical_inertia = clampf(
+		acceleration.y * 0.008,
+		-7.0,
+		7.0
+	)
+
+	var arm_swing = sin(walking_phase) * WALK_STRIDE * 0.55 * speed_ratio
+
+	var left_target = shoulder + Vector2(
+		ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia + arm_swing,
+		ARM_REST_VECTOR.y * ARM_LENGTH + vertical_inertia
+	)
+
+	var right_target = shoulder + Vector2(
+		-ARM_REST_VECTOR.x * ARM_LENGTH - horizontal_inertia - arm_swing,
+		ARM_REST_VECTOR.y * ARM_LENGTH + vertical_inertia
+	)
+
+	left_hand_velocity.y += ARM_GRAVITY * delta
+	right_hand_velocity.y += ARM_GRAVITY * delta
+
+	if not is_on_floor():
+		var air_motion = clampf(
+			velocity.y / JUMP_SPEED,
+			-1.0,
+			1.0
+		)
+
+		left_target.y += air_motion * BODY_HEIGHT * 0.06
+		right_target.y += air_motion * BODY_HEIGHT * 0.06
+
+	if is_on_floor() and not previous_floor_state:
+		left_hand_velocity.y -= 100.0
+		right_hand_velocity.y -= 100.0
+
+	var left_arm_state = spring_vector(
+		left_hand_offset,
+		left_hand_velocity,
+		left_target,
+		ARM_SPRING,
+		ARM_DAMPING,
+		delta
+	)
+
+	left_hand_offset = constrain_from_anchor(
+		shoulder,
+		left_arm_state[0],
+		ARM_LENGTH
+	)
+	left_hand_velocity = left_arm_state[1]
+
+	var right_arm_state = spring_vector(
+		right_hand_offset,
+		right_hand_velocity,
+		right_target,
+		ARM_SPRING,
+		ARM_DAMPING,
+		delta
+	)
+
+	right_hand_offset = constrain_from_anchor(
+		shoulder,
+		right_arm_state[0],
+		ARM_LENGTH
+	)
+	right_hand_velocity = right_arm_state[1]
+
+	# Each arm is now a two-bone chain. The elbow is solved from the
+	# shoulder and hand while keeping the upper/forearm lengths fixed,
+	# making the joint quite rigid without adding another floppy spring.
+	left_elbow_offset = solve_arm_joint(
+		shoulder,
+		left_hand_offset,
+		1.0
+	)
+
+	right_elbow_offset = solve_arm_joint(
+		shoulder,
+		right_hand_offset,
+		-1.0
+	)
+
+	# ==============================================================
+	# LEGS - human walk cycle
+	# ==============================================================
+	# Each foot has two phases:
+	#   0.0 -> 0.5 : planted/supporting the body
+	#   0.5 -> 1.0 : lifted and swinging forward
+	#
+	# During support the foot moves backward relative to the hips as the
+	# body passes over it. During swing it lifts, travels forward, and lands.
+	if is_on_floor() and speed_ratio > 0.05:
+		walking_phase = fmod(
+			walking_phase + delta * (WALK_CYCLE_SPEED + speed_ratio * 5.0),
+			TAU
+		)
+	else:
+		walking_phase = move_toward(
+			walking_phase,
+			0.0,
+			delta * 3.2
+		)
+
+	var left_cycle = fposmod(walking_phase / TAU, 1.0)
+	var right_cycle = fposmod(left_cycle + 0.5, 1.0)
+
+	var left_leg_target = get_walk_ankle_target(
+		left_cycle,
+		-1.0,
+		is_on_floor()
+	)
+
+	var right_leg_target = get_walk_ankle_target(
+		right_cycle,
+		1.0,
+		is_on_floor()
+	)
+
+	if speed_ratio <= 0.05 and is_on_floor():
+		left_leg_target = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
+		right_leg_target = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
+
+	# In the air both legs relax downward and slightly behind the body.
+	if not is_on_floor():
+		left_leg_target.y += BODY_HEIGHT * 0.06
+		right_leg_target.y += BODY_HEIGHT * 0.06
+		left_leg_target.x -= facing * BODY_HEIGHT * 0.04
+		right_leg_target.x -= facing * BODY_HEIGHT * 0.04
+
+	var left_cycle_stance = is_on_floor() and left_cycle < 0.5
+	var right_cycle_stance = is_on_floor() and right_cycle < 0.5
+
+	var left_ankle_state = spring_vector(
+		left_ankle_offset,
+		left_ankle_velocity,
+		left_leg_target,
+		PLANTED_FOOT_SPRING if left_cycle_stance else SWING_FOOT_SPRING,
+		PLANTED_FOOT_DAMPING if left_cycle_stance else SWING_FOOT_DAMPING,
+		delta
+	)
+
+	left_ankle_offset = left_ankle_state[0]
+	left_ankle_velocity = left_ankle_state[1]
+
+	var right_ankle_state = spring_vector(
+		right_ankle_offset,
+		right_ankle_velocity,
+		right_leg_target,
+		PLANTED_FOOT_SPRING if right_cycle_stance else SWING_FOOT_SPRING,
+		PLANTED_FOOT_DAMPING if right_cycle_stance else SWING_FOOT_DAMPING,
+		delta
+	)
+
+	right_ankle_offset = right_ankle_state[0]
+	right_ankle_velocity = right_ankle_state[1]
+
+	# The knee solver naturally produces a deeper bend on the lifted swing
+	# leg because its ankle is higher and farther forward.
+	left_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		left_ankle_offset,
+		facing
+	)
+
+	right_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		right_ankle_offset,
+		facing
+	)
+
+	left_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		left_ankle_offset,
+		facing
+	)
+
+	right_knee_offset = solve_leg(
+		Vector2(0.0, HIP_Y),
+		right_ankle_offset,
+		facing
+	)
+
+	previous_floor_state = is_on_floor()
 
 
-func solve_initial_leg_joint(hip, ankle, bend_direction):
+func get_walk_ankle_target(cycle, side, grounded):
+	var forward = facing
+
+	# Side separation keeps both legs connected to the central hip while
+	# leaving enough room for a readable human silhouette.
+	var side_offset = side * ANKLE_BASE_X
+
+	if not grounded:
+		return Vector2(
+			side_offset - forward * BODY_HEIGHT * 0.04,
+			ANKLE_BASE_Y + BODY_HEIGHT * 0.06
+		)
+
+	# Support: the foot is planted and the body moves over it.
+	if cycle < 0.5:
+		var support_t = cycle * 2.0
+		support_t = smoothstep(0.0, 1.0, support_t)
+
+		return Vector2(
+			side_offset + lerpf(
+				forward * WALK_STRIDE,
+				-forward * WALK_STRIDE,
+				support_t
+			),
+			ANKLE_BASE_Y
+		)
+
+	# Swing: lift the foot, bring it forward, then lower it for contact.
+	var swing_t = (cycle - 0.5) * 2.0
+	var swing_progress = smoothstep(0.0, 1.0, swing_t)
+	var lift = sin(swing_t * PI) * WALK_LIFT
+
+	return Vector2(
+		side_offset + lerpf(
+			-forward * WALK_STRIDE,
+			forward * WALK_STRIDE,
+			swing_progress
+		),
+		ANKLE_BASE_Y - lift
+	)
+
+
+func solve_leg(hip, ankle, bend_direction):
 	var to_ankle = ankle - hip
 	var distance = to_ankle.length()
 
+	if distance < 0.001:
+		return hip + Vector2(0.0, THIGH_LENGTH)
+
 	var max_reach = THIGH_LENGTH + SHIN_LENGTH
 	var min_reach = absf(THIGH_LENGTH - SHIN_LENGTH)
+
+	distance = clampf(
+		distance,
+		min_reach + 0.001,
+		max_reach - 0.001
+	)
+
+	var direction = to_ankle / to_ankle.length()
+	var perpendicular = Vector2(
+		-direction.y,
+		direction.x
+	)
+
+	var cos_knee_angle = clampf(
+		(
+			THIGH_LENGTH * THIGH_LENGTH +
+			distance * distance -
+			SHIN_LENGTH * SHIN_LENGTH
+		) / (2.0 * THIGH_LENGTH * distance),
+		-1.0,
+		1.0
+	)
+
+	var knee_along = THIGH_LENGTH * cos(acos(cos_knee_angle))
+	var knee_height = sqrt(
+		maxf(
+			THIGH_LENGTH * THIGH_LENGTH -
+			knee_along * knee_along,
+			0.0
+		)
+	)
+
+	var candidate_a = hip + direction * knee_along + perpendicular * knee_height
+	var candidate_b = hip + direction * knee_along - perpendicular * knee_height
+
+	# Select the knee that bends slightly forward.
+	if candidate_a.x * bend_direction > candidate_b.x * bend_direction:
+		return candidate_a
+
+	return candidate_b
+
+
+func update_body_floppiness(delta, acceleration):
+	# Forward acceleration tips the body backward; braking lets it swing
+	# forward and settle instead of snapping straight.
+	var target_angle = clampf(
+		-velocity.x * BODY_SPEED_LEAN -
+		acceleration.x * BODY_ACCEL_LEAN,
+		-BODY_MAX_ANGLE,
+		BODY_MAX_ANGLE
+	)
+
+	# Jumping and falling add a small amount of whole-body sway.
+	if not is_on_floor():
+		target_angle += clampf(
+			velocity.y * 0.00028,
+			-deg_to_rad(5.0),
+			deg_to_rad(5.0)
+		)
+
+	var angle_acceleration = (
+		target_angle - body_angle
+	) * BODY_ANGULAR_SPRING
+	angle_acceleration -= body_angular_velocity * BODY_ANGULAR_DAMPING
+
+	body_angular_velocity += angle_acceleration * delta
+	body_angle += body_angular_velocity * delta
+	body_angle = clampf(
+		body_angle,
+		-BODY_MAX_ANGLE * 1.15,
+		BODY_MAX_ANGLE * 1.15
+	)
+
+	# Soft vertical compression/extension makes the torso react to movement
+	# and landings instead of remaining visually rigid.
+	var target_bob = 0.0
+
+	if is_on_floor():
+		target_bob = clampf(
+			absf(velocity.x) * 0.012,
+			0.0,
+			BODY_MAX_BOB
+		)
+
+		if not previous_floor_state:
+			body_bob_velocity -= 26.0
+
+	var bob_acceleration = (
+		target_bob - body_bob
+	) * BODY_BOB_SPRING
+	bob_acceleration -= body_bob_velocity * BODY_BOB_DAMPING
+
+	body_bob_velocity += bob_acceleration * delta
+	body_bob += body_bob_velocity * delta
+	body_bob = clampf(
+		body_bob,
+		-BODY_MAX_BOB,
+		BODY_MAX_BOB
+	)
+
+
+func pose_point(point):
+	var pivot = Vector2(0.0, HIP_Y)
+	var relative = point - pivot
+	relative = relative.rotated(body_angle)
+
+	return pivot + relative + Vector2(0.0, body_bob)
+
+
+func solve_arm_joint(shoulder, hand, bend_direction):
+	var to_hand = hand - shoulder
+	var distance = to_hand.length()
+
+	if distance < 0.001:
+		return shoulder + Vector2(UPPER_ARM_LENGTH * bend_direction, 0.0)
+
+	var max_reach = UPPER_ARM_LENGTH + FOREARM_LENGTH
+	var min_reach = absf(UPPER_ARM_LENGTH - FOREARM_LENGTH)
+
 	var solved_distance = clampf(
 		distance,
 		min_reach + 0.001,
 		max_reach - 0.001
 	)
 
-	var direction = to_ankle / maxf(distance, 0.001)
+	var direction = to_hand / distance
 	var perpendicular = Vector2(-direction.y, direction.x)
 
-	var cos_knee = clampf(
+	var cos_elbow = clampf(
 		(
-			THIGH_LENGTH * THIGH_LENGTH +
+			UPPER_ARM_LENGTH * UPPER_ARM_LENGTH +
 			solved_distance * solved_distance -
-			SHIN_LENGTH * SHIN_LENGTH
-		) / (2.0 * THIGH_LENGTH * solved_distance),
+			FOREARM_LENGTH * FOREARM_LENGTH
+		) / (2.0 * UPPER_ARM_LENGTH * solved_distance),
 		-1.0,
 		1.0
 	)
 
-	var along = THIGH_LENGTH * cos(acos(cos_knee))
+	var along = UPPER_ARM_LENGTH * cos(acos(cos_elbow))
 	var bend = sqrt(
 		maxf(
-			THIGH_LENGTH * THIGH_LENGTH - along * along,
+			UPPER_ARM_LENGTH * UPPER_ARM_LENGTH -
+			along * along,
 			0.0
 		)
 	)
 
-	var candidate_a = hip + direction * along + perpendicular * bend
-	var candidate_b = hip + direction * along - perpendicular * bend
+	var candidate_a = shoulder + direction * along + perpendicular * bend
+	var candidate_b = shoulder + direction * along - perpendicular * bend
 
 	if candidate_a.x * bend_direction > candidate_b.x * bend_direction:
 		return candidate_a
@@ -900,135 +699,232 @@ func solve_initial_leg_joint(hip, ankle, bend_direction):
 	return candidate_b
 
 
-func midpoint(a, b):
-	return (a + b) * 0.5
+func spring_vector(current, current_velocity, target, stiffness, damping, delta):
+	var acceleration = (target - current) * stiffness
+	acceleration -= current_velocity * damping
+
+	current_velocity += acceleration * delta
+	current += current_velocity * delta
+
+	return [current, current_velocity]
 
 
-func segment_endpoints(body, length):
-	var direction = Vector2.RIGHT.rotated(body.rotation)
-	return [
-		body.global_position - direction * length * 0.5,
-		body.global_position + direction * length * 0.5
-	]
+func constrain_from_anchor(anchor, point, length):
+	var relative = point - anchor
+
+	if relative.length_squared() < 0.001:
+		return anchor + Vector2(length, 0.0)
+
+	return anchor + relative.normalized() * length
+
+
+func constrain_ankle_to_floor(point):
+	var posed = pose_point(point)
+
+	if is_on_floor():
+		var maximum_y = GROUND_RENDER_Y - GROUND_RENDER_MARGIN
+		posed.y = minf(posed.y, maximum_y)
+
+	return posed
+
+
+func get_uppercut_pose(attack_progress):
+	var progress = smoothstep(0.0, 1.0, attack_progress)
+
+	# The upper arm does the entire swing. The forearm is locked to it
+	# at a fixed 35 degree relative angle, so it never moves independently.
+	var upper_arm_angle = lerpf(
+		deg_to_rad(60.0),
+		deg_to_rad(-60.0),
+		progress
+	)
+
+	var upper_direction = Vector2(
+		facing * cos(upper_arm_angle),
+		sin(upper_arm_angle)
+	)
+
+	# Bend the forearm to the opposite side of the upper arm,
+	# while keeping the same fixed 35 degree joint angle.
+	var forearm_direction = upper_direction.rotated(
+		-UPPERCUT_ELBOW_ANGLE * facing
+	)
+
+	var shoulder = Vector2(0.0, SHOULDER_Y)
+	var elbow = shoulder + upper_direction * UPPER_ARM_LENGTH
+	var hand = elbow + forearm_direction * FOREARM_LENGTH
+
+	return [elbow, hand]
+
+
+func get_point(name):
+	var attack_progress = 0.0
+
+	if attack_timer > 0.0:
+		attack_progress = 1.0 - attack_timer / ATTACK_DURATION
+		attack_progress = clampf(attack_progress, 0.0, 1.0)
+
+	match name:
+		"head":
+			return pose_point(Vector2(0.0, HEAD_Y))
+
+		"shoulder_left":
+			return pose_point(Vector2(0.0, SHOULDER_Y))
+
+		"shoulder_right":
+			return pose_point(Vector2(0.0, SHOULDER_Y))
+
+		"hand_left":
+			if attack_timer > 0.0 and facing < 0.0:
+				var left_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(left_attack_pose[1])
+
+			return pose_point(left_hand_offset)
+
+		"hand_right":
+			if attack_timer > 0.0 and facing > 0.0:
+				var right_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(right_attack_pose[1])
+
+			return pose_point(right_hand_offset)
+
+		"elbow_left":
+			if attack_timer > 0.0 and facing < 0.0:
+				var left_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(left_attack_pose[0])
+
+			return pose_point(left_elbow_offset)
+
+		"elbow_right":
+			if attack_timer > 0.0 and facing > 0.0:
+				var right_attack_pose = get_uppercut_pose(attack_progress)
+				return pose_point(right_attack_pose[0])
+
+			return pose_point(right_elbow_offset)
+
+		"left_hip":
+			return pose_point(Vector2(0.0, HIP_Y))
+
+		"right_hip":
+			return pose_point(Vector2(0.0, HIP_Y))
+
+		"left_knee":
+			return pose_point(left_knee_offset)
+
+		"right_knee":
+			return pose_point(right_knee_offset)
+
+		"left_ankle":
+			return constrain_ankle_to_floor(left_ankle_offset)
+
+		"right_ankle":
+			return constrain_ankle_to_floor(right_ankle_offset)
+
+	return Vector2.ZERO
 
 
 func _draw():
-	if not parts.has("Torso"):
-		return
-
 	var color = MINT_GREEN
 
-	draw_vertical_segment(
-		parts["Torso"],
-		TORSO_HEIGHT,
-		TORSO_WIDTH * 0.46,
+	var head = get_point("head")
+
+	var shoulder_left = get_point("shoulder_left")
+	var shoulder_right = get_point("shoulder_right")
+	var hand_left = get_point("hand_left")
+	var hand_right = get_point("hand_right")
+
+	var left_hip = get_point("left_hip")
+	var right_hip = get_point("right_hip")
+	var left_knee = get_point("left_knee")
+	var right_knee = get_point("right_knee")
+	var left_ankle = get_point("left_ankle")
+	var right_ankle = get_point("right_ankle")
+
+	var elbow_left = get_point("elbow_left")
+	var elbow_right = get_point("elbow_right")
+
+	# Limbs first, torso second. Each arm is split at a rigid elbow joint.
+	draw_pill(
+		shoulder_left,
+		elbow_left,
+		ARM_THICKNESS,
 		color
 	)
 
-	draw_segment(
-		parts["RightUpperArm"],
-		UPPER_ARM_LENGTH,
-		LIMB_WIDTH,
+	draw_pill(
+		elbow_left,
+		hand_left,
+		ARM_THICKNESS,
 		color
 	)
 
-	draw_segment(
-		parts["RightForearm"],
-		FOREARM_LENGTH,
-		LIMB_WIDTH,
+	draw_pill(
+		shoulder_right,
+		elbow_right,
+		ARM_THICKNESS,
 		color
 	)
 
-	draw_segment(
-		parts["LeftUpperArm"],
-		UPPER_ARM_LENGTH,
-		LIMB_WIDTH,
+	draw_pill(
+		elbow_right,
+		hand_right,
+		ARM_THICKNESS,
 		color
 	)
 
-	draw_segment(
-		parts["LeftForearm"],
-		FOREARM_LENGTH,
-		LIMB_WIDTH,
+	draw_circle(
+		elbow_left,
+		ARM_THICKNESS * 0.62,
 		color
 	)
 
-	draw_segment(
-		parts["RightThigh"],
-		THIGH_LENGTH,
-		LIMB_WIDTH,
+	draw_circle(
+		elbow_right,
+		ARM_THICKNESS * 0.62,
 		color
 	)
 
-	draw_segment(
-		parts["RightShin"],
-		SHIN_LENGTH,
-		LIMB_WIDTH,
+	# Long, simple two-bone legs.
+	draw_pill(
+		left_hip,
+		left_knee,
+		LEG_THICKNESS,
 		color
 	)
 
-	draw_segment(
-		parts["LeftThigh"],
-		THIGH_LENGTH,
-		LIMB_WIDTH,
+	draw_pill(
+		left_knee,
+		left_ankle,
+		LEG_THICKNESS,
 		color
 	)
 
-	draw_segment(
-		parts["LeftShin"],
-		SHIN_LENGTH,
-		LIMB_WIDTH,
+	draw_pill(
+		right_hip,
+		right_knee,
+		LEG_THICKNESS,
 		color
 	)
 
-	var head = to_local(parts["Head"].global_position)
+	draw_pill(
+		right_knee,
+		right_ankle,
+		LEG_THICKNESS,
+		color
+	)
+
+	# Legs end cleanly at the ankles. There are no separate feet.
+	# Short, narrow upright torso.
+	draw_pill(
+		pose_point(Vector2(0.0, SHOULDER_Y - 3.0)),
+		pose_point(Vector2(0.0, HIP_Y)),
+		BODY_WIDTH * 0.46,
+		color
+	)
+
 	draw_circle(
 		head,
 		HEAD_RADIUS,
-		color
-	)
-
-	# Small joint caps keep the articulated silhouette visually connected.
-	for joint_name in [
-		"RightUpperArm",
-		"LeftUpperArm",
-		"RightForearm",
-		"LeftForearm",
-		"RightThigh",
-		"LeftThigh",
-		"RightShin",
-		"LeftShin"
-	]:
-		var point = to_local(parts[joint_name].global_position)
-		draw_circle(
-			point,
-			LIMB_WIDTH * 0.58,
-			color
-		)
-
-
-func draw_vertical_segment(body, length, width, color):
-	var direction = Vector2.UP.rotated(body.rotation)
-	var a = to_local(body.global_position - direction * length * 0.5)
-	var b = to_local(body.global_position + direction * length * 0.5)
-
-	draw_pill(
-		a,
-		b,
-		width,
-		color
-	)
-
-
-func draw_segment(body, length, width, color):
-	var endpoints = segment_endpoints(body, length)
-	var a = to_local(endpoints[0])
-	var b = to_local(endpoints[1])
-
-	draw_pill(
-		a,
-		b,
-		width,
 		color
 	)
 
