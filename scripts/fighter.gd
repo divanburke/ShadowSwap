@@ -31,6 +31,7 @@ const AIR_DECELERATION = 95.0
 const GRAVITY = 1500.0
 const FAST_FALL_ACCELERATION = 1200.0
 const MAX_FALL_SPEED = 980.0
+const MAX_HORIZONTAL_SPEED = 760.0
 const JUMP_SPEED = 635.0
 
 const WALL_JUMP_HORIZONTAL_SPEED = 500.0
@@ -436,7 +437,7 @@ func update_limb_physics(delta):
 		left_target.y += air_motion * BODY_HEIGHT * 0.06
 		right_target.y += air_motion * BODY_HEIGHT * 0.06
 
-	if is_on_floor() and not previous_floor_state:
+	if grounded and not previous_floor_state:
 		left_hand_velocity.y -= 100.0
 		right_hand_velocity.y -= 100.0
 
@@ -496,7 +497,7 @@ func update_limb_physics(delta):
 	#
 	# During support the foot moves backward relative to the hips as the
 	# body passes over it. During swing it lifts, travels forward, and lands.
-	if is_on_floor() and speed_ratio > 0.05:
+	if grounded and speed_ratio > 0.05:
 		walking_phase = fmod(
 			walking_phase + delta * (WALK_CYCLE_SPEED + speed_ratio * 5.0),
 			TAU
@@ -514,28 +515,28 @@ func update_limb_physics(delta):
 	var left_leg_target = get_walk_ankle_target(
 		left_cycle,
 		-1.0,
-		is_on_floor()
+		grounded
 	)
 
 	var right_leg_target = get_walk_ankle_target(
 		right_cycle,
 		1.0,
-		is_on_floor()
+		grounded
 	)
 
-	if speed_ratio <= 0.05 and is_on_floor():
+	if speed_ratio <= 0.05 and grounded:
 		left_leg_target = Vector2(-ANKLE_BASE_X, ANKLE_BASE_Y)
 		right_leg_target = Vector2(ANKLE_BASE_X, ANKLE_BASE_Y)
 
 	# In the air both legs relax downward and slightly behind the body.
-	if not is_on_floor():
+	if not grounded:
 		left_leg_target.y += BODY_HEIGHT * 0.06
 		right_leg_target.y += BODY_HEIGHT * 0.06
 		left_leg_target.x -= facing * BODY_HEIGHT * 0.04
 		right_leg_target.x -= facing * BODY_HEIGHT * 0.04
 
-	var left_cycle_stance = is_on_floor() and left_cycle < 0.5
-	var right_cycle_stance = is_on_floor() and right_cycle < 0.5
+	var left_cycle_stance = grounded and left_cycle < 0.5
+	var right_cycle_stance = grounded and right_cycle < 0.5
 
 	var left_ankle_state = spring_vector(
 		left_ankle_offset,
@@ -587,7 +588,7 @@ func update_limb_physics(delta):
 		facing
 	)
 
-	previous_floor_state = is_on_floor()
+	previous_floor_state = grounded
 
 
 func get_walk_ankle_target(cycle, side, grounded):
@@ -832,7 +833,7 @@ func constrain_from_anchor(anchor, point, length):
 func constrain_ankle_to_floor(point):
 	var posed = pose_point(point)
 
-	if is_on_floor():
+	if grounded:
 		var maximum_y = GROUND_RENDER_Y - GROUND_RENDER_MARGIN
 		posed.y = minf(posed.y, maximum_y)
 
