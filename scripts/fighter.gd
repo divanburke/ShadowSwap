@@ -36,6 +36,7 @@ const JUMP_SPEED = 635.0
 const WALL_JUMP_HORIZONTAL_SPEED = 500.0
 const WALL_JUMP_VERTICAL_SPEED = 620.0
 const WALL_CHECK_DISTANCE = 22.0
+const WALL_SLIDE_SPEED = 245.0
 const WALL_JUMP_COOLDOWN = 0.12
 
 const ATTACK_DURATION = 0.30
@@ -94,6 +95,7 @@ const GROUND_RENDER_MARGIN = LEG_THICKNESS * 0.55
 const BODY_ANGULAR_SPRING = 24.0
 const BODY_ANGULAR_DAMPING = 3.9
 const BODY_MAX_ANGLE = deg_to_rad(21.0)
+const BODY_AIR_MAX_ANGLE = deg_to_rad(55.0)
 const BODY_ACCEL_LEAN = 0.00055
 const BODY_SPEED_LEAN = 0.0010
 
@@ -269,6 +271,12 @@ func update_movement(delta):
 
 		if fast_fall:
 			velocity.y += FAST_FALL_ACCELERATION * delta
+
+		# Contact with a wall slows the fall, while normal horizontal
+		# momentum is preserved for the wall jump.
+		var wall_side = detect_wall_side()
+		if wall_side != 0.0 and velocity.x * wall_side > -20.0:
+			velocity.y = minf(velocity.y, WALL_SLIDE_SPEED)
 
 	velocity.y = minf(velocity.y, MAX_FALL_SPEED)
 
@@ -646,20 +654,27 @@ func solve_leg(hip, ankle, bend_direction):
 func update_body_floppiness(delta, acceleration):
 	# Forward acceleration tips the body backward; braking lets it swing
 	# forward and settle instead of snapping straight.
-	var target_angle = clampf(
+	var maximum_angle = BODY_MAX_ANGLE if is_on_floor() else BODY_AIR_MAX_ANGLE
+
+	var target_angle = (
 		-velocity.x * BODY_SPEED_LEAN -
-		acceleration.x * BODY_ACCEL_LEAN,
-		-BODY_MAX_ANGLE,
-		BODY_MAX_ANGLE
+		acceleration.x * BODY_ACCEL_LEAN
 	)
 
-	# Jumping and falling add a small amount of whole-body sway.
+	# Airborne characters can rotate substantially farther than when
+	# standing, which gives impacts and jumps the loose physics feel.
 	if not is_on_floor():
 		target_angle += clampf(
-			velocity.y * 0.00028,
-			-deg_to_rad(5.0),
-			deg_to_rad(5.0)
+			velocity.y * 0.00034,
+			-deg_to_rad(10.0),
+			deg_to_rad(10.0)
 		)
+
+	target_angle = clampf(
+		target_angle,
+		-maximum_angle,
+		maximum_angle
+	)
 
 	var angle_acceleration = (
 		target_angle - body_angle
@@ -686,7 +701,12 @@ func update_body_floppiness(delta, acceleration):
 		)
 
 		if not previous_floor_state:
-			body_bob_velocity -= 26.0
+			var landing_speed = clampf(
+				absf(previous_velocity.y),
+				0.0,
+				MAX_FALL_SPEED
+			)
+			body_bob_velocity -= lerpf(32.0, 58.0, landing_speed / MAX_FALL_SPEED)
 
 	var bob_acceleration = (
 		target_bob - body_bob
